@@ -1,0 +1,76 @@
+name: Update Manager (ZIP -> build -> repo)
+
+on:
+  push:
+    paths:
+      - 'ai-updates/*.zip'
+
+# Один запуск за раз: два быстрых архива подряд не должны конфликтовать.
+concurrency:
+  group: ai-update
+  cancel-in-progress: false
+
+jobs:
+  unzip-and-validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Защита от самозапуска: коммит бота, удаляющий ZIP, снова попадает
+      # под фильтр paths. Если ZIP в ai-updates/ уже нет, остальные шаги
+      # пропускаются, и job завершается без действий.
+      - name: Check for ZIP archive
+        id: check-zip
+        run: |
+          if ls ai-updates/*.zip >/dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "ZIP не найден: выход без действий."
+          fi
+
+      - name: Setup Python
+        if: steps.check-zip.outputs.found == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Node
+        if: steps.check-zip.outputs.found == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Git user
+        if: steps.check-zip.outputs.found == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # Скрипт использует только стандартную библиотеку Python.
+      - name: Process update (staging, test build, promote)
+        if: steps.check-zip.outputs.found == 'true'
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+        run: python scripts/process_update.py
+
+      # always(): скрипт удаляет ZIP на диске раннера при любом исходе, и это
+      # удаление нужно закоммитить, иначе ZIP останется на GitHub. При успехе
+      # в том же коммите идут файлы проекта, при провале только удаление ZIP.
+      - name: Commit and Push changes
+        if: always() && steps.check-zip.outputs.found == 'true'
+        run: |
+          git add -A
+          if git diff --staged --quiet; then
+            echo "Изменений нет."
+          else
+            git commit -m "🤖 Авто-обновление проекта"
+            git push origin ${{ github.ref_name }} || (git pull --rebase origin ${{ github.ref_name }} && git push origin ${{ github.ref_name }})
+          fi
