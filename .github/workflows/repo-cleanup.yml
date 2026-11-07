@@ -1,0 +1,43 @@
+name: Repo Cleanup (manual)
+
+# Только ручной запуск: Actions -> Repo Cleanup (manual) -> Run workflow.
+# По push ничего не удаляется, чтобы список в cleanup-requests/ нельзя
+# было применить случайно.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Git user
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Process cleanup request
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+        run: python scripts/process_cleanup.py
+
+      - name: Commit and push changes
+        run: |
+          git add -A
+          if git diff --staged --quiet; then
+            echo "Изменений нет."
+          else
+            git commit -m "🧹 Ручная очистка репозитория"
+            git push origin ${{ github.ref_name }}
+          fi
