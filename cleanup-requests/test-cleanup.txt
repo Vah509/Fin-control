@@ -1,6 +1,0 @@
-# Тест очистки: удаляем тестовую папку из automation-test.zip
-_automation-test
-# этого файла нет, в отчёте будет «уже отсутствует»
-_automation-test/no-such-file.txt
-# защищённый путь, будет пропущен
-scripts/process_update.py
