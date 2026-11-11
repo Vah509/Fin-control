@@ -1,0 +1,20 @@
+{
+  "name": "Fin-control",
+  "short_name": "Fin-control",
+  "description": "Учёт денег: срез остатков на дату",
+  "lang": "ru",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f1216",
+  "theme_color": "#1f6feb",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Срез на сегодня", "short_name": "Срез", "url": "/?go=snapshot", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Ввести остаток", "short_name": "Остаток", "url": "/?go=balance", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+  ]
+}
