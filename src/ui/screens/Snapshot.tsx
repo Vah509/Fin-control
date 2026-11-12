@@ -24,7 +24,10 @@ export function SnapshotScreen() {
   }, [date, base, project])
 
   const name = (id: string) => ref.accounts.find((a) => a.id === id)?.name ?? id
-  const groups = q.data && group ? groupSnapshot(q.data.snap, group) : null
+  const rawGroups = q.data && group ? groupSnapshot(q.data.snap, group) : null
+  const groups = rawGroups && group === 'project'
+    ? [...rawGroups].sort((a, b) => (ref.projects.findIndex((p) => p.id === a.groupKey)) - (ref.projects.findIndex((p) => p.id === b.groupKey)))
+    : rawGroups
 
   return (
     <Screen title="Срез на дату">

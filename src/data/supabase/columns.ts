@@ -25,7 +25,9 @@ export const SPECS: { [K in EntityName]: Spec } = {
   institutions: { table: 'institutions', pk: 'id', fields: [
     f('id', 'id'), f('key', 'key'), f('name', 'name'), f('kind', 'kind'), f('countryKey', 'country_key'), f('appearance', 'appearance', 'json'),
   ] },
-  projects: { table: 'projects', pk: 'id', fields: [f('id', 'id'), f('key', 'key'), f('name', 'name')] },
+  projects: { table: 'projects', pk: 'id', fields: [
+    f('id', 'id'), f('key', 'key'), f('name', 'name'), f('sortOrder', 'sort_order', 'int'), f('appearance', 'appearance', 'json'),
+  ] },
   accounts: { table: 'accounts', pk: 'id', fields: [
     f('id', 'id'), f('key', 'key'), f('name', 'name'), f('type', 'type'), f('institutionId', 'institution_id'),
     f('projectId', 'project_id'), f('holder', 'holder'), f('currencyKey', 'currency_key'), f('countryKey', 'country_key'),

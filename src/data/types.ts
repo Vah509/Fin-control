@@ -15,7 +15,7 @@ export interface Institution {
   countryKey: string | null; appearance: Json
 }
 
-export interface Project { id: string; key: string; name: string }
+export interface Project { id: string; key: string; name: string; sortOrder: number; appearance: Json }
 
 export type AccountType = 'bank' | 'wallet' | 'broker' | 'cash' | 'person' | 'firm'
 export type TrackingMode = 'balance_only' | 'balance_and_movements'
@@ -75,7 +75,7 @@ export interface BalanceCheckpoint {
 }
 
 export interface PeriodLock {
-  id: string; seq: number; projectId: string; lockedThrough: string
+  id: string; seq: number; projectId: string | null; lockedThrough: string
   lockedAt: string; lockedBy: string | null; status: 'active' | 'released'
   releasedAt: string | null; releasedBy: string | null; releaseReason: string | null
 }

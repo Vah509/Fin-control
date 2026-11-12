@@ -31,6 +31,8 @@ export interface WriteBatch {
   put?: { [K in EntityName]?: EntityMap[K][] }
   deleteTransactionIds?: string[]
   audit?: NewAuditEntry[]
+  /** Выдать пользователю доступ владельца к новым счетам. Хранилище без пользователей (память, SQLite) это игнорирует. */
+  grantOwnerAccess?: { accountId: string; userId: string }[]
 }
 
 export const DUMP_FORMAT = 'fin-control-dump'
@@ -48,7 +50,7 @@ export interface Storage {
   listTransactions(q?: TransactionQuery): Promise<Transaction[]>
   listCheckpoints(q?: CheckpointQuery): Promise<BalanceCheckpoint[]>
   listAccountIdentifiers(q?: IdentifierQuery): Promise<AccountIdentifier[]>
-  listPeriodLocks(projectId?: string): Promise<PeriodLock[]>
+  listPeriodLocks(): Promise<PeriodLock[]>
   listFxRates(q?: FxRateQuery): Promise<FxRate[]>
   listAudit(q?: AuditQuery): Promise<AuditEntry[]>
   applyBatch(batch: WriteBatch): Promise<void>

@@ -3,30 +3,28 @@ import {
   closePeriod, currentLock, endOfLocalDayMs, getCheckpointDiffs, iso, reopenPeriod, resolveTimeZone,
   type CheckpointDiff,
 } from '../../core'
-import type { PeriodLock, Project } from '../../data/types'
+import type { PeriodLock } from '../../data/types'
 import { useApp } from '../app'
 import { useLoad } from '../hooks'
 import { dateRu, dateTimeRu, errorText, lastDayOfPreviousMonth } from '../format'
 import { BackButton, DiffList, ErrorBox, Loading, Notice, Screen } from '../parts'
 
 export function PeriodsScreen() {
-  const { ctx, ref } = useApp()
+  const { ctx } = useApp()
   const locks = useLoad(() => ctx.storage.listPeriodLocks(), [])
   return (
     <Screen title="Закрытие периодов" back={<BackButton to="more" label="Ещё" />}>
       {!ctx.actor.isOwner && <Notice>Закрывать и открывать периоды может только владелец.</Notice>}
       {locks.loading && <Loading />}
       {locks.error && <ErrorBox text={locks.error} onRetry={locks.reload} />}
-      {locks.data && ref.projects.map((p) => (
-        <ProjectPeriods key={p.id} project={p} locks={locks.data!.filter((l) => l.projectId === p.id)} onChanged={locks.reload} />
-      ))}
+      {locks.data && <GlobalPeriods locks={locks.data} onChanged={locks.reload} />}
     </Screen>
   )
 }
 
 interface Check { diffs: CheckpointDiff[]; deleted: number }
 
-function ProjectPeriods({ project, locks, onChanged }: { project: Project; locks: PeriodLock[]; onChanged: () => void }) {
+function GlobalPeriods({ locks, onChanged }: { locks: PeriodLock[]; onChanged: () => void }) {
   const { ctx, ref, bump } = useApp()
   const cur = currentLock(locks)
   const active = locks.filter((l) => l.status === 'active').sort((a, b) => b.seq - a.seq)
@@ -43,7 +41,7 @@ function ProjectPeriods({ project, locks, onChanged }: { project: Project; locks
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
 
-  const accounts = ref.accounts.filter((a) => a.projectId === project.id)
+  const accounts = ref.accounts
   const accName = (id: string) => ref.accounts.find((a) => a.id === id)?.name ?? id
 
   function open(m: typeof mode) {
@@ -66,10 +64,10 @@ function ProjectPeriods({ project, locks, onChanged }: { project: Project; locks
 
   async function doClose() {
     if (!check) return
-    if (!window.confirm(`Закрыть период проекта «${project.name}» по ${dateRu(through)}? Записи до этой даты станут недоступны для правки.`)) return
+    if (!window.confirm(`Закрыть период по ${dateRu(through)} для всех счетов? Записи до этой даты станут недоступны для правки.`)) return
     setBusy(true); setError(null)
     try {
-      const r = await closePeriod(ctx, { projectId: project.id, through, purgeDeleted: purge, allowMismatch })
+      const r = await closePeriod(ctx, { through, purgeDeleted: purge, allowMismatch })
       setDone(`Период закрыт по ${dateRu(through)}. Удалено насовсем: ${r.purged}, очищено исходных данных выписок: ${r.rawCleared}.`)
       setMode('none'); bump(); onChanged()
     } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
@@ -79,7 +77,7 @@ function ProjectPeriods({ project, locks, onChanged }: { project: Project; locks
     if (!window.confirm('Открыть период? Записи за него снова можно будет менять. Действие попадёт в журнал.')) return
     setBusy(true); setError(null)
     try {
-      const r = await reopenPeriod(ctx, { projectId: project.id, steps, reason })
+      const r = await reopenPeriod(ctx, { steps, reason })
       setDone(r.lockedThrough ? `Период открыт. Теперь закрыт по ${dateRu(r.lockedThrough)}.` : 'Период открыт полностью.')
       setMode('none'); bump(); onChanged()
     } catch (e) { setError(errorText(e)) } finally { setBusy(false) }
@@ -91,7 +89,8 @@ function ProjectPeriods({ project, locks, onChanged }: { project: Project; locks
 
   return (
     <div className="card">
-      <h2>{project.name}</h2>
+      <h2>Все счета</h2>
+      <p className="muted">Закрытие общее: за период всё сведено и остатки точные.</p>
       <p>{cur ? <>Закрыт по <b>{dateRu(cur.lockedThrough)}</b></> : 'Не закрыт'}</p>
       {done && <div className="box ok" role="status">{done}</div>}
       {ctx.actor.isOwner && (

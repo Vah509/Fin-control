@@ -91,3 +91,18 @@ input:not([type=checkbox]):not([type=radio]), select {
 
 .login { max-width: 360px; margin: 0 auto; padding: calc(48px + env(safe-area-inset-top)) 16px 16px; }
 .login form { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+
+.chip { display: inline-grid; place-items: center; border-radius: 10px; flex: none; line-height: 1; }
+.grow { flex: 1; min-width: 0; }
+.group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.group-head h2 { margin-top: 16px; }
+.ctl { display: inline-flex; gap: 6px; margin-top: 12px; }
+.inline-rename { display: flex; gap: 6px; align-items: center; flex: 1; margin-top: 12px; }
+.inline-rename input { flex: 1; min-width: 0; }
+.account-head { display: flex; align-items: center; gap: 12px; }
+.label-small { font-size: .85rem; color: var(--muted); margin-bottom: 6px; }
+.swatches, .icons { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.swatch { width: 40px; height: 40px; border-radius: 50%; border: 3px solid transparent; }
+.swatch.on { border-color: var(--text); }
+.icon { width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-size: 1.3rem; }
+.icon.on { border: 2px solid var(--accent); }

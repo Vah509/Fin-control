@@ -134,13 +134,11 @@ export class SupabaseStorage implements Storage {
     return rows.map((r) => fromRow('accountIdentifiers', r, env))
   }
 
-  async listPeriodLocks(projectId?: string): Promise<PeriodLock[]> {
+  async listPeriodLocks(): Promise<PeriodLock[]> {
     await this.loadEnv()
-    const rows = await this.fetchAll(() => {
-      let b = this.db.from('period_locks').select('*')
-      if (projectId) b = b.eq('project_id', projectId)
-      return b.order('seq', { ascending: true }).order('id', { ascending: true })
-    }, 'чтение закрытий периодов')
+    const rows = await this.fetchAll(
+      () => this.db.from('period_locks').select('*').order('seq', { ascending: true }).order('id', { ascending: true }),
+      'чтение закрытий периодов')
     const env = this.env()
     return rows.map((r) => fromRow('periodLocks', r, env))
   }
@@ -179,7 +177,8 @@ export class SupabaseStorage implements Storage {
     const hasPut = ENTITY_NAMES.some((n) => (put[n]?.length ?? 0) > 0)
     const hasDel = (batch.deleteTransactionIds?.length ?? 0) > 0
     const hasAudit = (batch.audit?.length ?? 0) > 0
-    if (!hasPut && !hasDel && !hasAudit) return
+    const grants = batch.grantOwnerAccess ?? []
+    if (!hasPut && !hasDel && !hasAudit && grants.length === 0) return
 
     await this.loadEnv()
     // Новые валюты и счета из самого пакета нужны для перевода сумм в этом же пакете.
@@ -198,6 +197,9 @@ export class SupabaseStorage implements Storage {
     for (const name of WRITE_ORDER) {
       const rows = put[name] as EntityMap[typeof name][] | undefined
       if (rows?.length) payload.put[SPECS[name].table] = rows.map((r) => toRow(name, r as never, env))
+    }
+    if (grants.length) {
+      payload.put['account_access'] = grants.map((g) => ({ account_id: g.accountId, user_id: g.userId, role: 'owner' }))
     }
     const { error } = await this.db.rpc('apply_batch', { p: payload })
     if (error) dbFail('запись пакета', error)

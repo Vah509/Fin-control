@@ -41,7 +41,10 @@ export async function setup(opts: { withCrypto?: boolean; owner?: boolean } = {}
         { key: 'uah', code: 'UAH', name: 'Гривна', decimals: 2 },
         { key: 'usd', code: 'USD', name: 'Доллар', decimals: 2 },
       ],
-      projects: [{ id: ID.lichnoe, key: 'lichnoe', name: 'Личное' }, { id: ID.biznes, key: 'biznes', name: 'Бизнес' }],
+      projects: [
+        { id: ID.lichnoe, key: 'lichnoe', name: 'Личное', sortOrder: 0, appearance: {} },
+        { id: ID.biznes, key: 'biznes', name: 'Бизнес', sortOrder: 1, appearance: {} },
+      ],
       accounts: [
         account({ id: ID.space, key: 'slsp_space', currencyKey: 'eur', countryKey: 'sk', sortOrder: 1 }),
         account({ id: ID.cashUah, key: 'cash_uah', currencyKey: 'uah', countryKey: 'ua', type: 'cash', sortOrder: 2 }),

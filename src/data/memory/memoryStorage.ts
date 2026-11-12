@@ -66,9 +66,8 @@ export class MemoryStorage implements Storage {
     )
   }
 
-  async listPeriodLocks(projectId?: string) {
+  async listPeriodLocks() {
     return this.rows('periodLocks')
-      .filter((l) => !projectId || l.projectId === projectId)
       .sort((a, b) => a.seq - b.seq)
   }
 

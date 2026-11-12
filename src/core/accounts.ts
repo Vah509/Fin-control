@@ -38,11 +38,13 @@ export async function createAccount(ctx: CoreContext, input: NewAccountInput): P
     institutionId: input.institutionId ?? null, projectId: input.projectId, holder: input.holder ?? null,
     currencyKey: input.currencyKey, countryKey: input.countryKey, timezone: input.timezone ?? null,
     trackingMode: input.trackingMode, servicePercent: input.servicePercent ?? null,
-    appearance: input.appearance ?? {}, sortOrder: input.sortOrder ?? 0, archivedAt: null,
+    appearance: input.appearance ?? {}, archivedAt: null,
+    sortOrder: input.sortOrder ?? all.filter((a) => a.projectId === input.projectId).reduce((m, a) => Math.max(m, a.sortOrder), -1) + 1,
   }
   await validateAccount(ctx, acc)
   await ctx.storage.applyBatch({
     put: { accounts: [acc] },
+    grantOwnerAccess: ctx.actor.isOwner && ctx.actor.userId ? [{ accountId: acc.id, userId: ctx.actor.userId }] : undefined,
     audit: [auditEntry(ctx, 'account_created', { tableName: 'accounts', recordId: acc.id, newData: acc as never })],
   })
   return acc

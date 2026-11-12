@@ -22,6 +22,10 @@ export function parseDump(text: string): DataDump {
   if (!d || d.format !== DUMP_FORMAT || d.version !== 1 || typeof d.data !== 'object' || d.data === null) {
     return fail('INVALID_FIELD', 'это не файл выгрузки Fin-control (формат или версия не совпадают)')
   }
+  // Файлы, выгруженные до шага 4в, не знают про порядок и оформление разделов и про общее закрытие.
+  const data = d.data as unknown as Record<string, Record<string, unknown>[] | undefined>
+  if (Array.isArray(data['projects'])) data['projects'] = data['projects'].map((p, i) => ({ sortOrder: i, appearance: {}, ...p }))
+  if (Array.isArray(data['periodLocks'])) data['periodLocks'] = data['periodLocks'].map((l) => ({ projectId: null, ...l }))
   return d as DataDump
 }
 

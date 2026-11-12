@@ -43,7 +43,7 @@ describe('форма ввода остатка', () => {
     await commitBalanceEntry(ctx, { accountId: ID.space, asOf: '2026-10-01T10:00:00Z', newBalanceMinor: -2500, createAdjustment: true })
     expect((await getSnapshot(ctx, { date: '2026-10-02', accountIds: [ID.space] })).rows[0]!.balanceMinor).toBe(-2500)
     const { closePeriod } = await import('../src/core')
-    await closePeriod(ctx, { projectId: ID.lichnoe, through: '2026-10-31', allowMismatch: true })
+    await closePeriod(ctx, { through: '2026-10-31', allowMismatch: true })
     expect(await code(commitBalanceEntry(ctx, { accountId: ID.space, asOf: '2026-10-15T10:00:00Z', newBalanceMinor: 0 }))).toBe('PERIOD_LOCKED')
   })
 })

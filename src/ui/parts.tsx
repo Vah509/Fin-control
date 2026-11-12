@@ -1,7 +1,7 @@
 // Общие небольшие компоненты экранов.
 import type { ReactNode } from 'react'
-import type { AccountType } from '../data/types'
-import type { CheckpointDiff, GroupBy, SnapshotRow, SnapshotTotals } from '../core'
+import type { Account, AccountType } from '../data/types'
+import { COLORS, ICONS, resolveAppearance, type CheckpointDiff, type ColorKey, type GroupBy, type IconKey, type SnapshotRow, type SnapshotTotals } from '../core'
 import { useApp, type RefData } from './app'
 import { dateRu, money } from './format'
 
@@ -82,10 +82,13 @@ export function TotalsCard({ totals, title = 'Итого' }: { totals: SnapshotT
 
 export function AccountRow({ row, baseCurrency, onClick }: { row: SnapshotRow; baseCurrency: string; onClick?: () => void }) {
   const { fmt } = useCurrencyFormat()
+  const { ref } = useApp()
+  const account = ref.accounts.find((a) => a.id === row.accountId)
   const foreign = row.currencyKey !== baseCurrency
   return (
     <li className={`row${onClick ? ' tap' : ''}`} onClick={onClick}>
-      <div className="row-main">
+      {account && <AccountChip account={account} />}
+      <div className="row-main grow">
         <span className="row-title">{row.name}</span>
         {row.unaccountedMinor !== 0 && <span className="row-sub warn-text">неучтённое: {fmt(row.unaccountedMinor, row.currencyKey)}</span>}
       </div>
@@ -116,5 +119,39 @@ export function DiffList({ diffs, accountName }: { diffs: CheckpointDiff[]; acco
         )
       })}
     </ul>
+  )
+}
+
+// ---------- оформление счетов ----------
+
+export function AccountChip({ account, color, icon, size = 36 }: { account: Pick<Account, 'id' | 'type' | 'appearance'>; color?: ColorKey | null; icon?: IconKey | null; size?: number }) {
+  const r = resolveAppearance(account.appearance, account.id, account.type)
+  const c = color ?? r.color
+  const i = icon ?? r.icon
+  return (
+    <span className="chip" style={{ background: COLORS[c], width: size, height: size, fontSize: size * 0.5 }} aria-hidden="true">
+      {ICONS[i]}
+    </span>
+  )
+}
+
+export function AppearancePicker({ color, icon, onColor, onIcon }: {
+  color: ColorKey; icon: IconKey; onColor: (c: ColorKey) => void; onIcon: (i: IconKey) => void
+}) {
+  return (
+    <div className="picker">
+      <div className="swatches" role="radiogroup" aria-label="Цвет">
+        {(Object.keys(COLORS) as ColorKey[]).map((c) => (
+          <button type="button" key={c} role="radio" aria-checked={c === color} aria-label={c}
+            className={c === color ? 'swatch on' : 'swatch'} style={{ background: COLORS[c] }} onClick={() => onColor(c)} />
+        ))}
+      </div>
+      <div className="icons" role="radiogroup" aria-label="Иконка">
+        {(Object.keys(ICONS) as IconKey[]).map((i) => (
+          <button type="button" key={i} role="radio" aria-checked={i === icon} aria-label={i}
+            className={i === icon ? 'icon on' : 'icon'} onClick={() => onIcon(i)}>{ICONS[i]}</button>
+        ))}
+      </div>
+    </div>
   )
 }

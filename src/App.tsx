@@ -14,6 +14,8 @@ import { AccountsScreen } from './ui/screens/Accounts'
 import { MoreScreen } from './ui/screens/More'
 import { PeriodsScreen } from './ui/screens/Periods'
 import { DumpScreen } from './ui/screens/Dump'
+import { AccountScreen } from './ui/screens/Account'
+import { NewAccountScreen } from './ui/screens/NewAccount'
 import { ErrorBox, Loading } from './ui/parts'
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 
@@ -26,7 +28,7 @@ const TABS: { page: Page; label: string; icon: string }[] = [
 ]
 const TAB_OF: Record<Page, Page> = {
   home: 'home', balance: 'home', snapshot: 'snapshot', moves: 'moves', accounts: 'accounts',
-  more: 'more', periods: 'more', dump: 'more',
+  more: 'more', periods: 'more', dump: 'more', account: 'accounts', newAccount: 'accounts',
 }
 
 /** Ярлыки PWA: /?go=snapshot и /?go=balance. */
@@ -75,6 +77,7 @@ export function Shell({ db, ctx, initialRef, email }: { db: SupabaseClient; ctx:
   const [page, setPage] = useState<Page>(startPage)
   const [accountId, setAccountId] = useState<string | undefined>()
   const [version, setVersion] = useState(0)
+  const [ref, setRef] = useState<RefData>(initialRef)
 
   useEffect(() => {
     if (window.location.search) window.history.replaceState(null, '', window.location.pathname)
@@ -84,10 +87,11 @@ export function Shell({ db, ctx, initialRef, email }: { db: SupabaseClient; ctx:
     setAccountId(opts?.accountId); setPage(p); window.scrollTo(0, 0)
   }, [])
   const api: AppApi = useMemo(() => ({
-    ctx, ref: initialRef, email, go, version,
+    ctx, ref, email, go, version,
     bump: () => setVersion((v) => v + 1),
+    reloadRef: async () => { setRef(await loadRef(ctx)) },
     signOut: () => authSignOut(db),
-  }), [ctx, initialRef, email, go, version, db])
+  }), [ctx, ref, email, go, version, db])
 
   return (
     <AppProvider value={api}>
@@ -101,6 +105,8 @@ export function Shell({ db, ctx, initialRef, email }: { db: SupabaseClient; ctx:
           {page === 'more' && <MoreScreen />}
           {page === 'periods' && <PeriodsScreen />}
           {page === 'dump' && <DumpScreen />}
+          {page === 'account' && accountId && <AccountScreen accountId={accountId} />}
+          {page === 'newAccount' && <NewAccountScreen />}
         </main>
         <nav className="tabs" aria-label="Разделы">
           {TABS.map((t) => (

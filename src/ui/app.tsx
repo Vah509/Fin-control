@@ -19,13 +19,14 @@ export async function loadRef(ctx: CoreContext): Promise<RefData> {
     s.list('institutions'), s.list('appSettings'),
   ])
   accounts.sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
+  projects.sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
   return {
     accounts, projects, countries, currencies, institutions, settings: readSettings(settingsRows),
     cur: new Map(currencies.map((c) => [c.key, c])),
   }
 }
 
-export type Page = 'home' | 'snapshot' | 'moves' | 'accounts' | 'more' | 'balance' | 'periods' | 'dump'
+export type Page = 'home' | 'snapshot' | 'moves' | 'accounts' | 'more' | 'balance' | 'periods' | 'dump' | 'account' | 'newAccount'
 export interface NavOptions { accountId?: string }
 
 export interface AppApi {
@@ -34,6 +35,8 @@ export interface AppApi {
   email: string
   go: (page: Page, opts?: NavOptions) => void
   signOut: () => Promise<void>
+  /** Перечитать справочники (счета, разделы) после правки. */
+  reloadRef: () => Promise<void>
   /** Увеличивается после записи, чтобы экраны перечитали данные. */
   version: number
   bump: () => void

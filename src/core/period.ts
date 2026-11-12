@@ -7,7 +7,7 @@ import { accountTimeZone, currentLock } from './locks'
 import { getCheckpointDiffs } from './checkpoints'
 
 export interface ClosePeriodInput {
-  projectId: string
+  /** Закрытие общее на все счета: за период всё сведено и остатки точные. */
   through: string
   /** Окончательно удалить помеченные на удаление записи периода (иначе они остаются помеченными). */
   purgeDeleted?: boolean
@@ -18,12 +18,12 @@ export interface ClosePeriodInput {
 export async function closePeriod(ctx: CoreContext, input: ClosePeriodInput) {
   if (!ctx.actor.isOwner) fail('FORBIDDEN', 'закрывать период может только владелец')
   assertDate(input.through, 'дата закрытия')
-  const locks = await ctx.storage.listPeriodLocks(input.projectId)
+  const locks = await ctx.storage.listPeriodLocks()
   const cur = currentLock(locks)
   if (cur && input.through <= cur.lockedThrough) {
     fail('PERIOD_NOT_AFTER_LOCK', `период уже закрыт по ${cur.lockedThrough}`)
   }
-  const accounts = (await ctx.storage.list('accounts')).filter((a) => a.projectId === input.projectId)
+  const accounts = await ctx.storage.list('accounts')
   if (!input.allowMismatch) {
     const diffs = await getCheckpointDiffs(ctx, { accountIds: accounts.map((a) => a.id), throughDate: input.through })
     const bad = diffs.filter((d) => d.diffMinor !== 0)
@@ -45,7 +45,7 @@ export async function closePeriod(ctx: CoreContext, input: ClosePeriodInput) {
   }
   const lock: PeriodLock = {
     id: ctx.newId(), seq: locks.reduce((m, l) => Math.max(m, l.seq), 0) + 1,
-    projectId: input.projectId, lockedThrough: input.through, lockedAt: ctx.now().toISOString(),
+    projectId: null, lockedThrough: input.through, lockedAt: ctx.now().toISOString(),
     lockedBy: ctx.actor.userId, status: 'active', releasedAt: null, releasedBy: null, releaseReason: null,
   }
   await ctx.storage.applyBatch({
@@ -53,16 +53,16 @@ export async function closePeriod(ctx: CoreContext, input: ClosePeriodInput) {
     deleteTransactionIds: toDelete,
     audit: [auditEntry(ctx, 'period_closed', {
       tableName: 'period_locks', recordId: lock.id,
-      details: { projectId: input.projectId, through: input.through, purged, rawCleared },
+      details: { through: input.through, purged, rawCleared },
     })],
   })
   return { lock, purged, rawCleared }
 }
 
-export async function reopenPeriod(ctx: CoreContext, input: { projectId: string; steps: number; reason: string }) {
+export async function reopenPeriod(ctx: CoreContext, input: { steps: number; reason: string }) {
   if (!ctx.actor.isOwner) fail('FORBIDDEN', 'открывать период может только владелец')
   if (!input.reason.trim()) fail('INVALID_FIELD', 'нужна причина открытия')
-  const locks = await ctx.storage.listPeriodLocks(input.projectId)
+  const locks = await ctx.storage.listPeriodLocks()
   const active = locks.filter((l) => l.status === 'active').sort((a, b) => b.seq - a.seq)
   if (!Number.isInteger(input.steps) || input.steps < 1 || input.steps > active.length) {
     fail('NOTHING_TO_REOPEN', `активных закрытий: ${active.length}, запрошено шагов: ${input.steps}`)
@@ -77,7 +77,7 @@ export async function reopenPeriod(ctx: CoreContext, input: { projectId: string;
     put: { periodLocks: released },
     audit: [auditEntry(ctx, 'period_reopened', {
       tableName: 'period_locks', recordId: released[0]!.id,
-      details: { projectId: input.projectId, steps: input.steps, from: before, to: after, reason: input.reason.trim() },
+      details: { steps: input.steps, from: before, to: after, reason: input.reason.trim() },
     })],
   })
   return { lockedThrough: after }

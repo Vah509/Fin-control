@@ -20,7 +20,7 @@ describe('выгрузка и слияние', () => {
   })
   it('при закрытом периоде слияние запрещено', async () => {
     const s = await setup()
-    await closePeriod(s.ctx, { projectId: ID.lichnoe, through: '2026-09-30' })
+    await closePeriod(s.ctx, { through: '2026-09-30' })
     expect(await code(mergeDump(s.ctx, await s.storage.exportAll()))).toBe('PERIOD_LOCKED')
   })
 })

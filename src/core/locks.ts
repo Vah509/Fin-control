@@ -8,8 +8,9 @@ import { readSettings, resolveTimeZone } from './settings'
 export const currentLock = (locks: PeriodLock[]): PeriodLock | null =>
   locks.filter((l) => l.status === 'active').sort((a, b) => b.seq - a.seq)[0] ?? null
 
-export async function getLockedThrough(ctx: CoreContext, projectId: string): Promise<string | null> {
-  return currentLock(await ctx.storage.listPeriodLocks(projectId))?.lockedThrough ?? null
+/** Закрытие общее на все счета: текущая точка = последняя действующая запись. */
+export async function getLockedThrough(ctx: CoreContext): Promise<string | null> {
+  return currentLock(await ctx.storage.listPeriodLocks())?.lockedThrough ?? null
 }
 
 export async function accountTimeZone(ctx: CoreContext, account: Account): Promise<string> {
@@ -17,9 +18,9 @@ export async function accountTimeZone(ctx: CoreContext, account: Account): Promi
   return resolveTimeZone(account, countries, readSettings(settings))
 }
 
-/** Бросает PERIOD_LOCKED, если момент попадает в закрытый период проекта счёта. */
+/** Бросает PERIOD_LOCKED, если момент (в поясе счёта) попадает в закрытый период. */
 export async function assertUnlocked(ctx: CoreContext, account: Account, instantIso: string): Promise<void> {
-  const through = await getLockedThrough(ctx, account.projectId)
+  const through = await getLockedThrough(ctx)
   if (!through) return
   const tz = await accountTimeZone(ctx, account)
   const day = localDateOf(Date.parse(instantIso), tz)
