@@ -47,6 +47,7 @@ export function AccountsScreen() {
   const q = useLoad(() => getSnapshot(ctx, { date: today }), [today])
   const [edit, setEdit] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
   const [archiveOpen, setArchiveOpen] = useState(false)
@@ -64,11 +65,6 @@ export function AccountsScreen() {
 
   return (
     <Screen title="Счета">
-      <div className="actions">
-        <button className="btn small primary" onClick={() => go('newAccount')}>+ Счёт</button>
-        <button className="btn small" onClick={() => setAdding((v) => !v)}>+ Раздел</button>
-        <button className="btn small" onClick={() => setEdit((v) => !v)}>{edit ? 'Готово' : 'Изменить порядок'}</button>
-      </div>
       {adding && (
         <form className="card form" onSubmit={(e) => {
           e.preventDefault()
@@ -126,8 +122,23 @@ export function AccountsScreen() {
           )}
         </div>
       )}
-      {!edit && <p className="muted pad">Нажмите на счёт, чтобы переименовать его, сменить иконку и цвет или ввести остаток.</p>}
       {edit && <p className="muted pad">Удерживайте ⠿ и перетащите счёт или раздел на нужное место. Чтобы перенести счёт в другой раздел, откройте его карточку.</p>}
+      <div className="fab-space" aria-hidden="true" />
+      {edit ? (
+        <button className="fab fab-done" onClick={() => setEdit(false)}>Готово</button>
+      ) : (
+        <>
+          {menuOpen && <div className="fab-backdrop" onClick={() => setMenuOpen(false)} />}
+          {menuOpen && (
+            <ul className="plain fab-menu" role="menu">
+              <li><button role="menuitem" onClick={() => { setMenuOpen(false); go('newAccount') }}>Новый счёт</button></li>
+              <li><button role="menuitem" onClick={() => { setMenuOpen(false); setAdding(true); window.scrollTo(0, 0) }}>Новый раздел</button></li>
+              <li><button role="menuitem" onClick={() => { setMenuOpen(false); setEdit(true) }}>Изменить порядок</button></li>
+            </ul>
+          )}
+          <button className="fab" aria-label="Меню" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>{menuOpen ? '✕' : '☰'}</button>
+        </>
+      )}
     </Screen>
   )
 }

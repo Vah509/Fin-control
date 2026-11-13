@@ -30,7 +30,7 @@ export function SnapshotScreen() {
     : rawGroups
 
   return (
-    <Screen title="Срез на дату">
+    <Screen title="Аналитика">
       <div className="filters">
         <label>Дата<input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
         <label>Итог в валюте

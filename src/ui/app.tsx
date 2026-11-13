@@ -35,6 +35,8 @@ export interface AppApi {
   ref: RefData
   email: string
   go: (page: Page, opts?: NavOptions) => void
+  /** Назад на предыдущий экран; если истории нет, переход на `fallback`. */
+  back: (fallback: Page) => void
   signOut: () => Promise<void>
   /** Перечитать справочники (счета, разделы) после правки. */
   reloadRef: () => Promise<void>

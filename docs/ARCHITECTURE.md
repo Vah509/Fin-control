@@ -9,8 +9,8 @@ src/core/      правила (чистый TypeScript, без React и без S
 src/data/      types.ts (типы), storage.ts (интерфейс), supabase/ (сейчас), memory/ (тесты), sqlite/ (позже, нет)
 src/auth/      вход email+пароль, роль владельца
 src/net/       bankRates.ts: запросы к API monobank и ПриватБанка и разбор ответов (без правил)
-src/ui/        app.tsx (контекст), fxAuto.ts (автообновление курсов при открытии), parts.tsx, format.ts, hooks.ts, dragSort.ts (перетаскивание), screens/*
-src/App.tsx    корень: вход, загрузка справочников, нижние вкладки, ярлыки PWA (?go=snapshot|balance)
+src/ui/        app.tsx (контекст), fxAuto.ts (автообновление курсов при открытии), parts.tsx, format.ts, hooks.ts, dragSort.ts (перетаскивание), navHistory.ts (история навигации), screens/*
+src/App.tsx    корень: вход, загрузка справочников, нижние вкладки (Главная, Счета, Движения, Аналитика, Прочее), история браузера для кнопки «назад», ярлыки PWA (?go=snapshot|balance)
 tests/         тесты ядра на памяти, контрактные тесты хранилищ, ui-format, integration/ (живой Supabase)
 supabase/migrations/   схема и права (без бизнес-правил)
 public/        manifest.webmanifest (2 ярлыка), иконки
@@ -58,7 +58,7 @@ Home (итог на сегодня, расхождения контрольны�
 
 ## 6. Тесты
 
-123 теста, 13 файлов, vitest. Ядро проверяется на `memory/`; `supabase-mappers` проверяет перевод строк; `integration/supabase.int.ts` (контракт на живой базе) запускается вручную и пока не запускался.
+126 тестов, 14 файлов, vitest. Ядро проверяется на `memory/`; `supabase-mappers` проверяет перевод строк; `integration/supabase.int.ts` (контракт на живой базе) запускается вручную и пока не запускался.
 SQL-проверки итерации 1 (90 штук, из старого справочника) перенесены в тесты ядра как сценарии.
 
 ### Курсы при открытии (`core/fxUpdate.ts`, `net/bankRates.ts`, `ui/fxAuto.ts`)

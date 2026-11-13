@@ -1,5 +1,5 @@
 // Корень приложения: вход, загрузка справочников, нижняя панель вкладок. Экраны вызывают только ядро.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createSupabaseClient, SupabaseStorage } from './data/supabase'
 import { currentSession, loadActor, signIn, signOut as authSignOut } from './auth/auth'
 import { AppProvider, buildCore, loadRef, type AppApi, type NavOptions, type Page, type RefData } from './ui/app'
@@ -18,14 +18,15 @@ import { DumpScreen } from './ui/screens/Dump'
 import { AccountScreen } from './ui/screens/Account'
 import { NewAccountScreen } from './ui/screens/NewAccount'
 import { ErrorBox, Loading } from './ui/parts'
+import { canGoBack, readNavState } from './ui/navHistory'
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
 
 const TABS: { page: Page; label: string; icon: string }[] = [
   { page: 'home', label: 'Главная', icon: '⌂' },
-  { page: 'snapshot', label: 'Срез', icon: '▤' },
-  { page: 'moves', label: 'Движения', icon: '⇅' },
   { page: 'accounts', label: 'Счета', icon: '▭' },
-  { page: 'more', label: 'Ещё', icon: '⋯' },
+  { page: 'moves', label: 'Движения', icon: '⇅' },
+  { page: 'snapshot', label: 'Аналитика', icon: '▤' },
+  { page: 'more', label: 'Прочее', icon: '⋯' },
 ]
 const TAB_OF: Record<Page, Page> = {
   home: 'home', balance: 'home', snapshot: 'snapshot', moves: 'moves', accounts: 'accounts',
@@ -75,19 +76,49 @@ export function App() {
 }
 
 export function Shell({ db, ctx, initialRef, email }: { db: SupabaseClient; ctx: CoreContext; initialRef: RefData; email: string }) {
-  const [page, setPage] = useState<Page>(startPage)
-  const [accountId, setAccountId] = useState<string | undefined>()
+  const [page, setPage] = useState<Page>(() => readNavState(window.history.state)?.page ?? startPage())
+  const [accountId, setAccountId] = useState<string | undefined>(() => readNavState(window.history.state)?.accountId)
   const [version, setVersion] = useState(0)
   const [ref, setRef] = useState<RefData>(initialRef)
   const [fx, setFx] = useState<FxNote | null>(null)
+  const cur = useRef<{ page: Page; accountId?: string }>({ page, accountId })
+  cur.current = { page, accountId }
 
+  // История: первая запись это «Главная» (с неё «назад» закрывает приложение); если приложение открыто ярлыком
+  // на другой экран, поверх «Главной» добавляется запись этого экрана. После перезагрузки состояние берётся из истории.
   useEffect(() => {
-    if (window.location.search) window.history.replaceState(null, '', window.location.pathname)
+    if (readNavState(window.history.state)) return
+    const path = window.location.pathname
+    const start = startPage()
+    window.history.replaceState({ idx: 0, page: 'home' }, '', path)
+    if (start !== 'home') window.history.pushState({ idx: 1, page: start }, '', path)
+  }, [])
+  useEffect(() => {
+    const onPop = (e: PopStateEvent) => {
+      const st = readNavState(e.state)
+      if (!st) return
+      setAccountId(st.accountId); setPage(st.page); window.scrollTo(0, 0)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
   }, [])
 
-  const go = useCallback((p: Page, opts?: NavOptions) => {
-    setAccountId(opts?.accountId); setPage(p); window.scrollTo(0, 0)
+  const show = useCallback((p: Page, id: string | undefined, replace: boolean) => {
+    const same = cur.current.page === p && cur.current.accountId === id
+    if (!same) {
+      const idx = (readNavState(window.history.state)?.idx ?? 0) + (replace ? 0 : 1)
+      const st = { idx, page: p, accountId: id }
+      if (replace) window.history.replaceState(st, '', window.location.pathname)
+      else window.history.pushState(st, '', window.location.pathname)
+      setAccountId(id); setPage(p)
+    }
+    window.scrollTo(0, 0)
   }, [])
+  const go = useCallback((p: Page, opts?: NavOptions) => show(p, opts?.accountId, false), [show])
+  const back = useCallback((fallback: Page) => {
+    if (canGoBack(window.history.state)) window.history.back()
+    else show(fallback, undefined, true)
+  }, [show])
   const refreshFx = useCallback(async (force = true) => {
     try {
       const { note, changed } = await runFxRefresh(ctx, todayLocal(), initialRef.cur, force)
@@ -101,11 +132,11 @@ export function Shell({ db, ctx, initialRef, email }: { db: SupabaseClient; ctx:
   useEffect(() => { void refreshFx(false) }, [refreshFx])
 
   const api: AppApi = useMemo(() => ({
-    ctx, ref, email, go, version, fx, refreshFx: () => refreshFx(true),
+    ctx, ref, email, go, back, version, fx, refreshFx: () => refreshFx(true),
     bump: () => setVersion((v) => v + 1),
     reloadRef: async () => { setRef(await loadRef(ctx)) },
     signOut: () => authSignOut(db),
-  }), [ctx, ref, email, go, version, db, fx, refreshFx])
+  }), [ctx, ref, email, go, back, version, db, fx, refreshFx])
 
   return (
     <AppProvider value={api}>

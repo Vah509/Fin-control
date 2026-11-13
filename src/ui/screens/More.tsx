@@ -1,12 +1,18 @@
+import { currentLock } from '../../core'
 import { useApp } from '../app'
+import { useLoad } from '../hooks'
+import { dateRu } from '../format'
 import { Screen } from '../parts'
 
 export function MoreScreen() {
   const { go, email, signOut, ctx } = useApp()
+  const locks = useLoad(() => ctx.storage.listPeriodLocks(), [])
+  const cur = locks.data ? currentLock(locks.data) : null
+  const lockText = locks.data ? (cur ? `закрыт по ${dateRu(cur.lockedThrough)}` : 'не закрыт') : null
   return (
-    <Screen title="Ещё">
+    <Screen title="Прочее">
       <ul className="plain menu">
-        <li><button className="menu-item" onClick={() => go('periods')}>Закрытие периодов</button></li>
+        <li><button className="menu-item" onClick={() => go('periods')}>Закрытие периодов{lockText && <span className="row-sub">{lockText}</span>}</button></li>
         <li><button className="menu-item" onClick={() => go('dump')}>Выгрузка и загрузка JSON</button></li>
       </ul>
       <div className="card">

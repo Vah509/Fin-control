@@ -65,7 +65,7 @@ export function DumpScreen() {
   }
 
   return (
-    <Screen title="Выгрузка и загрузка" back={<BackButton to="more" label="Ещё" />}>
+    <Screen title="Выгрузка и загрузка" back={<BackButton to="more" label="Прочее" />}>
       {!ctx.actor.isOwner && <Notice>Выгрузка и загрузка доступны только владельцу.</Notice>}
       <div className="card">
         <h2>Выгрузка</h2>

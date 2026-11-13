@@ -13,7 +13,7 @@ export function PeriodsScreen() {
   const { ctx } = useApp()
   const locks = useLoad(() => ctx.storage.listPeriodLocks(), [])
   return (
-    <Screen title="Закрытие периодов" back={<BackButton to="more" label="Ещё" />}>
+    <Screen title="Закрытие периодов" back={<BackButton to="more" label="Прочее" />}>
       {!ctx.actor.isOwner && <Notice>Закрывать и открывать периоды может только владелец.</Notice>}
       {locks.loading && <Loading />}
       {locks.error && <ErrorBox text={locks.error} onRetry={locks.reload} />}

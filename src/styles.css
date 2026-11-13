@@ -112,3 +112,13 @@ input:not([type=checkbox]):not([type=radio]), select {
 .drag-handle:active { cursor: grabbing; color: var(--text); }
 .row.dragging, .group.dragging { background: var(--card); }
 .group.dragging { border-radius: 12px; }
+
+/* плавающая кнопка-меню на экране «Счета» */
+.fab-space { height: 84px; }
+.fab { position: fixed; right: 16px; bottom: calc(64px + env(safe-area-inset-bottom) + 16px); z-index: 20; min-width: 56px; height: 56px; border-radius: 28px; border: 0; background: var(--accent); color: var(--accent-text); font-size: 1.5rem; line-height: 1; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+.fab-done { padding: 0 24px; font-size: 1rem; font-weight: 600; }
+.fab-backdrop { position: fixed; inset: 0; z-index: 15; background: transparent; }
+.fab-menu { position: fixed; right: 16px; bottom: calc(64px + env(safe-area-inset-bottom) + 84px); z-index: 20; margin: 0; padding: 4px; min-width: 210px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+.fab-menu li { padding: 0; }
+.fab-menu button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--text); font-size: 1rem; min-height: 44px; padding: 10px 14px; border-radius: 8px; }
+.menu-item .row-sub { display: block; }

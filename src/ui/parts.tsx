@@ -43,8 +43,8 @@ export function Screen({ title, children, back }: { title: string; children: Rea
   )
 }
 export function BackButton({ to, label = 'Назад' }: { to: Parameters<ReturnType<typeof useApp>['go']>[0]; label?: string }) {
-  const { go } = useApp()
-  return <button className="link back" onClick={() => go(to)}>‹ {label}</button>
+  const { back } = useApp()
+  return <button className="link back" onClick={() => back(to)}>‹ {label}</button>
 }
 
 export function useCurrencyFormat() {
