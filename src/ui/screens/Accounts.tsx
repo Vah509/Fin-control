@@ -1,5 +1,8 @@
 import { useState } from 'react'
-import { createProject, getSnapshot, reorderAccounts, reorderProjects, setAccountArchived, updateProject, type SnapshotRow } from '../../core'
+import {
+  createProject, getSnapshot, isDivider, newDividerId, projectItems, reorderProjects, saveProjectLayout, setAccountArchived,
+  updateProject, visibleItems, type SnapshotRow,
+} from '../../core'
 import type { Account, Project } from '../../data/types'
 import { useApp } from '../app'
 import { useLoad } from '../hooks'
@@ -16,12 +19,23 @@ function AccountList({ project, accounts, edit, base, rowOf, act }: {
   rowOf: (id: string) => SnapshotRow | undefined
   act: (fn: () => Promise<unknown>) => Promise<void>
 }) {
-  const { ctx, go } = useApp()
-  const drag = useDragSort(accounts.map((a) => a.id), edit, (next) => act(() => reorderAccounts(ctx, project.id, next)))
+  const { ctx, ref, go } = useApp()
+  const items = projectItems(ref.layout, project.id, accounts)
+  const shown = edit ? items : visibleItems(items)
+  const drag = useDragSort(shown, edit, (next) => act(() => saveProjectLayout(ctx, project.id, next)))
   const byId = new Map(accounts.map((a) => [a.id, a]))
   return (
     <ul className="plain rows">
       {drag.order.map((id, i) => {
+        if (isDivider(id)) {
+          return edit ? (
+            <li key={id} ref={drag.setEl(id)} className={`row divider-row${drag.dragging === id ? ' dragging' : ''}`} style={drag.itemStyle(id, i)}>
+              <div className="grow muted">— разделитель —</div>
+              <button className="btn small" aria-label="Удалить разделитель" onClick={() => void act(() => saveProjectLayout(ctx, project.id, items.filter((x) => x !== id)))}>✕</button>
+              <span className="drag-handle" aria-label="Перетащить разделитель" role="button" {...drag.handleProps(id)}>⠿</span>
+            </li>
+          ) : <li key={id} className="divider" aria-hidden="true" />
+        }
         const a = byId.get(id)!
         const row = rowOf(a.id)
         return edit ? (
@@ -96,6 +110,10 @@ export function AccountsScreen() {
               ) : <h2>{p.name}</h2>}
               {edit && renaming?.id !== p.id && (
                 <span className="ctl">
+                  {accs.length > 0 && (
+                    <button className="btn small" aria-label="Добавить разделитель"
+                      onClick={() => void act(() => saveProjectLayout(ctx, p.id, [...projectItems(ref.layout, p.id, accs), newDividerId(ctx)]))}>―</button>
+                  )}
                   <button className="btn small" aria-label="Переименовать раздел" onClick={() => setRenaming({ id: p.id, name: p.name })}>✎</button>
                   <span className="drag-handle" aria-label="Перетащить раздел" role="button" {...pdrag.handleProps(p.id)}>⠿</span>
                 </span>
@@ -122,7 +140,7 @@ export function AccountsScreen() {
           )}
         </div>
       )}
-      {edit && <p className="muted pad">Удерживайте ⠿ и перетащите счёт или раздел на нужное место. Чтобы перенести счёт в другой раздел, откройте его карточку.</p>}
+      {edit && <p className="muted pad">Удерживайте ⠿ и перетащите счёт, разделитель или раздел на нужное место. Кнопка ― в заголовке раздела добавляет разделитель (внизу списка), ✕ удаляет. Чтобы перенести счёт в другой раздел, откройте его карточку.</p>}
       <div className="fab-space" aria-hidden="true" />
       {edit ? (
         <button className="fab fab-done" onClick={() => setEdit(false)}>Готово</button>

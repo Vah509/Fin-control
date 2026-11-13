@@ -6,7 +6,7 @@
 
 | Таблица | Сущность ядра | Миграция | Заметки |
 |---|---|---|---|
-| `app_settings` | appSettings | 1 | ключ-значение: `base_currency`, `default_timezone`, `fx_pivot_currency` |
+| `app_settings` | appSettings | 1 | ключ-значение: `base_currency`, `default_timezone`, `fx_pivot_currency`, `account_layout` (разделители между счетами: `{id раздела: [id счетов и разделителей `div:...`]}`, запись только у разделов с разделителями) |
 | `plan_types` | planTypes | 7а | плановость (`planned`, `unplanned`) |
 | `countries`, `currencies` | countries, currencies | 1 | пояс страны, число знаков валюты |
 | `institutions` | institutions | 1 | банки, Revolut, брокер, фирмы |

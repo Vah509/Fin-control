@@ -1,7 +1,7 @@
 // Контекст приложения: ядро с хранилищем Supabase, справочники, навигация. Экраны вызывают только ядро.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type DependencyList } from 'react'
 import {
-  createContext as createCoreContext, readSettings, type CoreContext, type Settings,
+  createContext as createCoreContext, readLayout, readSettings, type CoreContext, type Layout, type Settings,
 } from '../core'
 import type { Account, Country, Currency, Institution, Project } from '../data/types'
 import { SupabaseStorage } from '../data/supabase'
@@ -10,6 +10,8 @@ import type { FxNote } from './fxAuto'
 export interface RefData {
   accounts: Account[]; projects: Project[]; countries: Country[]
   currencies: Currency[]; institutions: Institution[]; settings: Settings
+  /** Разделители между счетами по разделам (настройка account_layout). */
+  layout: Layout
   cur: Map<string, Currency>
 }
 
@@ -22,7 +24,7 @@ export async function loadRef(ctx: CoreContext): Promise<RefData> {
   accounts.sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
   projects.sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
   return {
-    accounts, projects, countries, currencies, institutions, settings: readSettings(settingsRows),
+    accounts, projects, countries, currencies, institutions, settings: readSettings(settingsRows), layout: readLayout(settingsRows),
     cur: new Map(currencies.map((c) => [c.key, c])),
   }
 }
