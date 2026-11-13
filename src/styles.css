@@ -124,5 +124,5 @@ input:not([type=checkbox]):not([type=radio]), select {
 .menu-item .row-sub { display: block; }
 
 /* разделитель между счетами */
-.rows li.divider { display: block; height: 12px; padding: 0 !important; background: var(--bg); border-bottom: 1px solid var(--line); }
+.rows li.divider { display: block; height: 28px; padding: 0 !important; background: var(--bg); border-bottom: 1px solid var(--line); }
 .rows li.divider-row { background: var(--bg); }

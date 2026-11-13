@@ -112,7 +112,7 @@ export function AccountsScreen() {
                 <span className="ctl">
                   {accs.length > 0 && (
                     <button className="btn small" aria-label="Добавить разделитель"
-                      onClick={() => void act(() => saveProjectLayout(ctx, p.id, [...projectItems(ref.layout, p.id, accs), newDividerId(ctx)]))}>―</button>
+                      onClick={() => void act(() => saveProjectLayout(ctx, p.id, [newDividerId(ctx), ...projectItems(ref.layout, p.id, accs)]))}>―</button>
                   )}
                   <button className="btn small" aria-label="Переименовать раздел" onClick={() => setRenaming({ id: p.id, name: p.name })}>✎</button>
                   <span className="drag-handle" aria-label="Перетащить раздел" role="button" {...pdrag.handleProps(p.id)}>⠿</span>
@@ -140,7 +140,7 @@ export function AccountsScreen() {
           )}
         </div>
       )}
-      {edit && <p className="muted pad">Удерживайте ⠿ и перетащите счёт, разделитель или раздел на нужное место. Кнопка ― в заголовке раздела добавляет разделитель (внизу списка), ✕ удаляет. Чтобы перенести счёт в другой раздел, откройте его карточку.</p>}
+      {edit && <p className="muted pad">Удерживайте ⠿ и перетащите счёт, разделитель или раздел на нужное место. Кнопка ― в заголовке раздела добавляет разделитель (вверху списка), ✕ удаляет. Чтобы перенести счёт в другой раздел, откройте его карточку.</p>}
       <div className="fab-space" aria-hidden="true" />
       {edit ? (
         <button className="fab fab-done" onClick={() => setEdit(false)}>Готово</button>
