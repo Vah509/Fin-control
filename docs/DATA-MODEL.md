@@ -29,10 +29,9 @@
 
 Миграция `20261107100100_iteration2_storage_only.sql` (7б) убирает бизнес-логику итерации 1 из базы. **После всей цепочки на чистой базе остаются:**
 - функции: `public.apply_batch(jsonb)` (запись пакета, security invoker), `public.keep_alive()`; `app_private`: `account_role`, `can_read`, `can_write`, `handle_new_user`, `is_account_owner`, `is_any_owner`, `is_project_owner`, `touch_updated_at`;
-- мёртвый остаток миграции 4в (в базе после 7б ничего их не вызывает): `app_private.assert_unlocked`, `app_private.locked_through_all`: удалить новой миграцией (долг D2);
 - триггеры: `z_touch` (обновление `updated_at`, 8 штук) и `on_auth_user_created`.
 Правила, блокировка закрытого периода и журнал только в ядре (`src/core/`).
-**Состояние живой тестовой базы неизвестно:** 7б помечена «ЧЕРНОВИК», применена ли она, владелец не подтвердил (`docs/ROADMAP.md`, пункт 0.1).
+Живая тестовая база (проверено 13.11.2026) соответствует: в `public` только `apply_batch` и `keep_alive`. Мёртвые функции `app_private.assert_unlocked` и `locked_through_all` убирает миграция `20261113110000_drop_dead_lock_functions.sql`.
 
 ## Дамп (файл выгрузки)
 
