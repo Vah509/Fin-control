@@ -106,3 +106,9 @@ input:not([type=checkbox]):not([type=radio]), select {
 .swatch.on { border-color: var(--text); }
 .icon { width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-size: 1.3rem; }
 .icon.on { border: 2px solid var(--accent); }
+
+/* Перетаскивание порядка счетов и разделов */
+.drag-handle { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; font-size: 1.5rem; line-height: 1; color: var(--muted); border: 1px solid var(--line); border-radius: 10px; cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; }
+.drag-handle:active { cursor: grabbing; color: var(--text); }
+.row.dragging, .group.dragging { background: var(--card); }
+.group.dragging { border-radius: 12px; }

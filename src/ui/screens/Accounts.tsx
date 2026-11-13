@@ -1,19 +1,46 @@
 import { useState } from 'react'
-import { createProject, getSnapshot, reorderAccounts, reorderProjects, setAccountArchived, updateProject } from '../../core'
+import { createProject, getSnapshot, reorderAccounts, reorderProjects, setAccountArchived, updateProject, type SnapshotRow } from '../../core'
 import type { Account, Project } from '../../data/types'
 import { useApp } from '../app'
 import { useLoad } from '../hooks'
 import { errorText, todayLocal } from '../format'
 import { AccountChip, AccountRow, ErrorBox, Loading, Screen } from '../parts'
+import { useDragSort } from '../dragSort'
 
-/** Меняет местами два соседних элемента списка id. */
-function swapped(ids: string[], id: string, dir: -1 | 1): string[] | null {
-  const i = ids.indexOf(id), j = i + dir
-  if (i < 0 || j < 0 || j >= ids.length) return null
-  const out = [...ids];[out[i], out[j]] = [out[j]!, out[i]!]
-  return out
+/** Список счетов одного раздела; в режиме порядка элементы перетаскиваются за ручку ⠿. */
+function AccountList({ project, accounts, edit, base, rowOf, act }: {
+  project: Project
+  accounts: Account[]
+  edit: boolean
+  base: string
+  rowOf: (id: string) => SnapshotRow | undefined
+  act: (fn: () => Promise<unknown>) => Promise<void>
+}) {
+  const { ctx, go } = useApp()
+  const drag = useDragSort(accounts.map((a) => a.id), edit, (next) => act(() => reorderAccounts(ctx, project.id, next)))
+  const byId = new Map(accounts.map((a) => [a.id, a]))
+  return (
+    <ul className="plain rows">
+      {drag.order.map((id, i) => {
+        const a = byId.get(id)!
+        const row = rowOf(a.id)
+        return edit ? (
+          <li key={a.id} ref={drag.setEl(a.id)} className={`row${drag.dragging === a.id ? ' dragging' : ''}`} style={drag.itemStyle(a.id, i)}>
+            <AccountChip account={a} />
+            <div className="row-main grow"><span className="row-title">{a.name}</span></div>
+            <span className="drag-handle" aria-label="Перетащить" role="button" {...drag.handleProps(a.id)}>⠿</span>
+          </li>
+        ) : row ? (
+          <AccountRow key={a.id} row={row} baseCurrency={base} onClick={() => go('account', { accountId: a.id })} />
+        ) : (
+          <li key={a.id} className="row tap" onClick={() => go('account', { accountId: a.id })}>
+            <AccountChip account={a} /><div className="row-main grow"><span className="row-title">{a.name}</span></div>
+          </li>
+        )
+      })}
+    </ul>
+  )
 }
-
 export function AccountsScreen() {
   const { ctx, ref, go, bump, reloadRef } = useApp()
   const today = todayLocal()
@@ -31,14 +58,8 @@ export function AccountsScreen() {
     setError(null)
     try { await fn(); await reloadRef(); bump() } catch (e) { setError(errorText(e)) }
   }
-  const moveProject = (p: Project, dir: -1 | 1) => {
-    const order = swapped(ref.projects.map((x) => x.id), p.id, dir)
-    if (order) void act(() => reorderProjects(ctx, order))
-  }
-  const moveAcc = (a: Account, dir: -1 | 1) => {
-    const order = swapped(ref.accounts.filter((x) => x.projectId === a.projectId).map((x) => x.id), a.id, dir)
-    if (order) void act(() => reorderAccounts(ctx, a.projectId, order))
-  }
+  const pdrag = useDragSort(ref.projects.map((p) => p.id), edit, (next) => act(() => reorderProjects(ctx, next)))
+  const projectById = new Map(ref.projects.map((p) => [p.id, p]))
   const archived = ref.accounts.filter((a) => a.archivedAt)
 
   return (
@@ -60,11 +81,12 @@ export function AccountsScreen() {
       {error && <ErrorBox text={error} />}
       {q.loading && <Loading />}
       {q.error && <ErrorBox text={q.error} onRetry={q.reload} />}
-      {q.data && ref.projects.map((p, pi) => {
+      {q.data && pdrag.order.map((pid, pi) => {
+        const p = projectById.get(pid)!
         const accs = ref.accounts.filter((a) => a.projectId === p.id && !a.archivedAt)
         if (accs.length === 0 && !edit) return null
         return (
-          <div key={p.id} className="group">
+          <div key={p.id} ref={pdrag.setEl(p.id)} className={`group${pdrag.dragging === p.id ? ' dragging' : ''}`} style={pdrag.itemStyle(p.id, pi)}>
             <div className="group-head">
               {renaming?.id === p.id ? (
                 <form className="inline-rename" onSubmit={(e) => {
@@ -79,33 +101,12 @@ export function AccountsScreen() {
               {edit && renaming?.id !== p.id && (
                 <span className="ctl">
                   <button className="btn small" aria-label="Переименовать раздел" onClick={() => setRenaming({ id: p.id, name: p.name })}>✎</button>
-                  <button className="btn small" aria-label="Раздел выше" disabled={pi === 0} onClick={() => moveProject(p, -1)}>▲</button>
-                  <button className="btn small" aria-label="Раздел ниже" disabled={pi === ref.projects.length - 1} onClick={() => moveProject(p, 1)}>▼</button>
+                  <span className="drag-handle" aria-label="Перетащить раздел" role="button" {...pdrag.handleProps(p.id)}>⠿</span>
                 </span>
               )}
             </div>
             {accs.length === 0 && <p className="muted pad">В разделе нет счетов.</p>}
-            <ul className="plain rows">
-              {accs.map((a, ai) => {
-                const row = rowOf(a.id)
-                return edit ? (
-                  <li key={a.id} className="row">
-                    <AccountChip account={a} />
-                    <div className="row-main grow"><span className="row-title">{a.name}</span></div>
-                    <span className="ctl">
-                      <button className="btn small" aria-label="Выше" disabled={ai === 0} onClick={() => moveAcc(a, -1)}>▲</button>
-                      <button className="btn small" aria-label="Ниже" disabled={ai === accs.length - 1} onClick={() => moveAcc(a, 1)}>▼</button>
-                    </span>
-                  </li>
-                ) : row ? (
-                  <AccountRow key={a.id} row={row} baseCurrency={base} onClick={() => go('account', { accountId: a.id })} />
-                ) : (
-                  <li key={a.id} className="row tap" onClick={() => go('account', { accountId: a.id })}>
-                    <AccountChip account={a} /><div className="row-main grow"><span className="row-title">{a.name}</span></div>
-                  </li>
-                )
-              })}
-            </ul>
+            {accs.length > 0 && <AccountList project={p} accounts={accs} edit={edit} base={base} rowOf={rowOf} act={act} />}
           </div>
         )
       })}
@@ -126,6 +127,7 @@ export function AccountsScreen() {
         </div>
       )}
       {!edit && <p className="muted pad">Нажмите на счёт, чтобы переименовать его, сменить иконку и цвет или ввести остаток.</p>}
+      {edit && <p className="muted pad">Удерживайте ⠿ и перетащите счёт или раздел на нужное место. Чтобы перенести счёт в другой раздел, откройте его карточку.</p>}
     </Screen>
   )
 }

@@ -8,7 +8,7 @@
 src/core/      правила (чистый TypeScript, без React и без Supabase)
 src/data/      types.ts (типы), storage.ts (интерфейс), supabase/ (сейчас), memory/ (тесты), sqlite/ (позже, нет)
 src/auth/      вход email+пароль, роль владельца
-src/ui/        app.tsx (контекст), parts.tsx, format.ts, hooks.ts, screens/*
+src/ui/        app.tsx (контекст), parts.tsx, format.ts, hooks.ts, dragSort.ts (перетаскивание), screens/*
 src/App.tsx    корень: вход, загрузка справочников, нижние вкладки, ярлыки PWA (?go=snapshot|balance)
 tests/         тесты ядра на памяти, контрактные тесты хранилищ, ui-format, integration/ (живой Supabase)
 supabase/migrations/   схема и права (без бизнес-правил)
@@ -52,12 +52,16 @@ public/        manifest.webmanifest (2 ярлыка), иконки
 
 ## 5. Экраны (`src/ui/screens/`)
 
-Home (итог на сегодня, расхождения контрольных точек), Snapshot (срез на дату и группировки), Balance (ввод остатка), Moves (просмотр 100 последних операций за 30 дней, без ввода), Accounts (разделы, порядок, перенос, архив), Account (карточка: название, раздел, цвет, иконка, архив), NewAccount, More, Periods (закрытие и открытие), Dump (выгрузка и загрузка файла), Login.
+Home (итог на сегодня, расхождения контрольных точек), Snapshot (срез на дату и группировки), Balance (ввод остатка), Moves (просмотр 100 последних операций за 30 дней, без ввода), Accounts (разделы, порядок перетаскиванием за ручку ⠿, архив; перенос счёта в другой раздел через его карточку), Account (карточка: название, раздел, цвет, иконка, архив), NewAccount, More, Periods (закрытие и открытие), Dump (выгрузка и загрузка файла), Login.
 
 ## 6. Тесты
 
-91 тест, 11 файлов, vitest. Ядро проверяется на `memory/`; `supabase-mappers` проверяет перевод строк; `integration/supabase.int.ts` (контракт на живой базе) запускается вручную и пока не запускался.
+103 теста, 12 файлов, vitest. Ядро проверяется на `memory/`; `supabase-mappers` проверяет перевод строк; `integration/supabase.int.ts` (контракт на живой базе) запускается вручную и пока не запускался.
 SQL-проверки итерации 1 (90 штук, из старого справочника) перенесены в тесты ядра как сценарии.
+
+### Перетаскивание (`src/ui/dragSort.ts`)
+
+Хук `useDragSort(ids, enabled, onCommit)`: pointer events на ручке (`touch-action: none`), сдвиг соседей по ходу, автопрокрутка у краёв экрана, одно сохранение при отпускании (`reorderAccounts`, `reorderProjects`), порядок на экране обновляется сразу, до ответа базы. Чистые функции `targetIndex`, `moveItem`, `shiftFor` покрыты тестами (`tests/drag-sort.test.ts`); сам хук проверен одноразовым тестом в jsdom (не хранится в репозитории: нужен пакет jsdom).
 
 ## 7. Развёртывание
 
