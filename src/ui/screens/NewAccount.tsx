@@ -6,12 +6,8 @@ import {
 import type { Account, AccountType, TrackingMode } from '../../data/types'
 import { useApp } from '../app'
 import { errorText } from '../format'
-import { AppearancePicker, BackButton, Screen, TYPE_LABELS } from '../parts'
+import { AppearancePicker, BackButton, Screen, TYPE_LABELS, TYPE_TEXT } from '../parts'
 
-const TYPE_TEXT: Record<AccountType, string> = {
-  bank: 'Банковский счёт или карта', wallet: 'Кошелёк (Revolut и т.п.)', broker: 'Брокерский счёт',
-  cash: 'Наличные', person: 'Деньги у человека', firm: 'Фирма',
-}
 const TYPE_ICON: Record<AccountType, IconKey> = { bank: 'bank', wallet: 'wallet', broker: 'broker', cash: 'cash', person: 'person', firm: 'firm' }
 const defaultMode = (t: AccountType): TrackingMode => (t === 'cash' || t === 'person' || t === 'broker' ? 'balance_only' : 'balance_and_movements')
 

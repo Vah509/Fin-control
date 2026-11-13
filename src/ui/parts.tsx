@@ -8,6 +8,10 @@ import { dateRu, money } from './format'
 export const TYPE_LABELS: Record<AccountType, string> = {
   bank: 'Банки', wallet: 'Кошельки', broker: 'Брокер', cash: 'Наличные', person: 'У людей', firm: 'Фирмы',
 }
+export const TYPE_TEXT: Record<AccountType, string> = {
+  bank: 'Банковский счёт или карта', wallet: 'Кошелёк (Revolut и т.п.)', broker: 'Брокерский счёт',
+  cash: 'Наличные', person: 'Деньги у человека', firm: 'Фирма',
+}
 export const GROUP_LABELS: Record<GroupBy, string> = {
   country: 'Страна', type: 'Тип места', holder: 'Держатель', project: 'Проект', institution: 'Учреждение',
 }
