@@ -5,7 +5,7 @@ import { dateRu, todayLocal } from '../format'
 import { ErrorBox, Loading, Notice, Screen, TotalsCard } from '../parts'
 
 export function Home() {
-  const { ctx, go } = useApp()
+  const { ctx, go, fx, refreshFx } = useApp()
   const today = todayLocal()
   const q = useLoad(async () => {
     const snap = await getSnapshot(ctx, { date: today })
@@ -21,6 +21,9 @@ export function Home() {
         <button className="btn primary" onClick={() => go('balance')}>Ввести остаток</button>
         <button className="btn" onClick={() => go('snapshot')}>Срез на дату</button>
       </div>
+      {fx && (
+        <Notice kind={fx.kind}>{fx.text}{fx.kind === 'warn' && <>{' '}<button className="link" onClick={() => void refreshFx()}>Повторить</button></>}</Notice>
+      )}
       {q.loading && <Loading />}
       {q.error && <ErrorBox text={q.error} onRetry={q.reload} />}
       {q.data && (

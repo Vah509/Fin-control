@@ -5,6 +5,7 @@ import {
 } from '../core'
 import type { Account, Country, Currency, Institution, Project } from '../data/types'
 import { SupabaseStorage } from '../data/supabase'
+import type { FxNote } from './fxAuto'
 
 export interface RefData {
   accounts: Account[]; projects: Project[]; countries: Country[]
@@ -40,6 +41,10 @@ export interface AppApi {
   /** Увеличивается после записи, чтобы экраны перечитали данные. */
   version: number
   bump: () => void
+  /** Результат автообновления курсов (null = всё в порядке или ещё не проверялось). */
+  fx: FxNote | null
+  /** Запросить курсы у банка вручную. */
+  refreshFx: () => Promise<void>
 }
 
 const Ctx = createContext<AppApi | null>(null)

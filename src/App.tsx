@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createSupabaseClient, SupabaseStorage } from './data/supabase'
 import { currentSession, loadActor, signIn, signOut as authSignOut } from './auth/auth'
 import { AppProvider, buildCore, loadRef, type AppApi, type NavOptions, type Page, type RefData } from './ui/app'
-import { errorText } from './ui/format'
+import { errorText, todayLocal } from './ui/format'
+import { runFxRefresh, type FxNote } from './ui/fxAuto'
 import type { CoreContext } from './core'
 import { Login } from './ui/screens/Login'
 import { Home } from './ui/screens/Home'
@@ -78,6 +79,7 @@ export function Shell({ db, ctx, initialRef, email }: { db: SupabaseClient; ctx:
   const [accountId, setAccountId] = useState<string | undefined>()
   const [version, setVersion] = useState(0)
   const [ref, setRef] = useState<RefData>(initialRef)
+  const [fx, setFx] = useState<FxNote | null>(null)
 
   useEffect(() => {
     if (window.location.search) window.history.replaceState(null, '', window.location.pathname)
@@ -86,12 +88,24 @@ export function Shell({ db, ctx, initialRef, email }: { db: SupabaseClient; ctx:
   const go = useCallback((p: Page, opts?: NavOptions) => {
     setAccountId(opts?.accountId); setPage(p); window.scrollTo(0, 0)
   }, [])
+  const refreshFx = useCallback(async (force = true) => {
+    try {
+      const { note, changed } = await runFxRefresh(ctx, todayLocal(), initialRef.cur, force)
+      setFx(note)
+      if (changed) setVersion((v) => v + 1)
+    } catch (e) {
+      setFx({ kind: 'warn', text: `Курсы не обновлены: ${errorText(e)}` })
+    }
+  }, [ctx, initialRef])
+  // Курс на сегодня: при открытии проверяем и при необходимости берём у банка (monobank, затем ПриватБанк).
+  useEffect(() => { void refreshFx(false) }, [refreshFx])
+
   const api: AppApi = useMemo(() => ({
-    ctx, ref, email, go, version,
+    ctx, ref, email, go, version, fx, refreshFx: () => refreshFx(true),
     bump: () => setVersion((v) => v + 1),
     reloadRef: async () => { setRef(await loadRef(ctx)) },
     signOut: () => authSignOut(db),
-  }), [ctx, ref, email, go, version, db])
+  }), [ctx, ref, email, go, version, db, fx, refreshFx])
 
   return (
     <AppProvider value={api}>
