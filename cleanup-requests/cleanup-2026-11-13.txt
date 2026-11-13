@@ -1,2 +1,0 @@
-# 13.11.2026: дубль миграции 4в с неверным именем (копия 20261111100000_iteration4_editing_global_lock.sql)
-supabase/migrations/migration-4v (1).sql
