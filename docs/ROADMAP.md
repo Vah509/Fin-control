@@ -4,26 +4,23 @@
 
 ## 0. Наведение порядка (перед шагом 5)
 
-**0.1 Восстановить миграцию итерации 2 в git.** Нужно описание таблиц `plan_types`, `tag_groups`, `tags`, `counterparties`, `counterparty_identifiers` из живой тестовой базы. Владелец выполняет в SQL Editor по одному запросу и присылает результат (скриншот или текст):
-- `select table_name, column_name, data_type, is_nullable, column_default from information_schema.columns where table_schema = 'public' and table_name in ('plan_types','tag_groups','tags','counterparties','counterparty_identifiers') order by table_name, ordinal_position;`
-- `select conrelid::regclass as tbl, conname, pg_get_constraintdef(oid) as def from pg_constraint where conrelid in ('public.plan_types'::regclass,'public.tag_groups'::regclass,'public.tags'::regclass,'public.counterparties'::regclass,'public.counterparty_identifiers'::regclass) order by 1,2;`
-- `select tablename, policyname, cmd, qual, with_check from pg_policies where schemaname = 'public' and tablename in ('plan_types','tag_groups','tags','counterparties','counterparty_identifiers') order by 1,2;`
-- `select n.nspname, p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('public','app_private') order by 1,2;`
-- `select event_object_table, trigger_name from information_schema.triggers where trigger_schema = 'public' order by 1,2;`
-Результат: `supabase/migrations/…_iteration2_dictionaries.sql` (идемпотентная), плюс внешние ключи операций на контрагентов и теги.
+**0.1 Узнать состояние живой тестовой базы.** Миграции итерации 2 найдены и добавлены в репозиторий 13.11.2026 (`20261107100000_iteration2_counterparties_tags.sql`, `20261107100100_iteration2_storage_only.sql`). Неизвестно одно: применена ли вторая (7б, «чистка» логики) в живой базе. Владелец выполняет в SQL Editor одним запросом: `select proname from pg_proc where pronamespace = 'public'::regnamespace order by 1;`
+Если в ответе только `apply_batch` и `keep_alive`, 7б применена, всё готово. Если есть другие функции (`get_snapshot`, `close_period` и т.п.), 7б не применена: Claude подготовит безопасный вариант (в файле 7б команды `create policy` без `drop policy if exists`, после 4в она упадёт на повторных политиках).
 
-**0.2 Убрать мусор в репозитории.** (а) `supabase/migrations/migration-4v (1).sql` дубль миграции 4в с неверным именем: удалить списком в `cleanup-requests/` (файл-список лежит рядом с этим ZIP). (б) `scripts/lib/__pycache__/` (6 файлов `.pyc`) попали в git: удалить папку вручную в веб-интерфейсе GitHub (автоочистка защищает `scripts/`); `.gitignore` их уже игнорирует.
+**0.2 Убрать мусор в репозитории.** Сделано 13.11.2026 (дубль миграции 4в и `__pycache__` удалены).
 
-**0.3 Обновить правила автоматизации** (по желанию): файлы `scripts/lib/checks.py` и `scripts/process_update.py` с проверкой наличия `docs/STATUS.md` и `docs/CHANGELOG.md` в ZIP; кладутся вручную через GitHub (лежат рядом с этим ZIP).
+**0.3 Обновить правила автоматизации** (по желанию, нужен компьютер или веб-интерфейс GitHub): файлы `scripts/lib/checks.py` и `scripts/process_update.py` с проверкой наличия `docs/STATUS.md` и `docs/CHANGELOG.md` в ZIP. Файлы отданы владельцу 13.11.2026, пока не загружены.
 
 **0.4 `keep_alive`:** сделано 13.11.2026: миграция `20261113100000_keep_alive.sql` и инструкция `docs/keep-alive-worker.md`.
+
+**0.5 Seed.** Seed (`seed-draft-2026-11-07.json` и `seed-load-2026-11-07.sql`) **в репозиторий не кладём**: в нём имена людей, держатели счетов и стартовые остатки, а репозиторий публичный (клонируется без входа). Хранить у владельца вне GitHub. Загрузчик seed в приложении (шаг 5.0) должен читать файл, выбранный на телефоне.
 
 ## 1. Долги
 
 | № | Долг | Как закрыть |
 |---|---|---|
-| D1 | Нет в git миграции итерации 2 (`keep_alive` добавлена 13.11) | пункт 0.1 |
-| D2 | В базе остались SQL-функции итерации 1 (`get_snapshot*`, `convert_amount`, `*_identifier`, `round_to_currency`, `fx_rate*`); триггеры журнала `audit_*` дублируют запись ядра | решить: удалить (чистая миграция) или оставить как справочник; проверить двойной журнал на живой базе |
+| D1 | ~~Нет в git миграции итерации 2~~ | закрыт 13.11.2026 |
+| D2 | Если 7б не применена в живой базе: в ней остались SQL-функции и триггеры итерации 1. Во всех случаях: мёртвые `app_private.assert_unlocked`, `locked_through_all` от 4в | пункт 0.1; потом миграция-уборка |
 | D3 | Нет zod | добавить при загрузчике seed и импорте |
 | D4 | 4в не проверена на живой базе и телефоне; `npm run test:supabase` не запускался | владелец: раздел 5 `docs/STATUS.md`; запуск контрактных тестов |
 | D5 | Не правятся тип, валюта, страна, учреждение, держатель, режим учёта счёта; нет создания учреждений; нет UI оформления разделов | коррекция 2.2 |
@@ -45,7 +42,7 @@
 ## 3. Шаг 5: загрузка движений
 
 Порядок подшагов (каждый отдельным ZIP):
-- **5.0 Основа:** миграция итерации 2 в git (0.1), внешние ключи операций, таблицы `imports`, `import_rows` (без логики), zod, загрузчик seed-JSON (пробный прогон, идемпотентный upsert по `key`).
+- **5.0 Основа:** таблицы `imports`, `import_rows` (без логики), zod, загрузчик seed-JSON (пробный прогон, идемпотентный upsert по `key`).
 - **5.1 Ввод вручную:** приход и расход на счёт; наличные за 2 шага (экран суммы, экран тегов, плитки сохраняют сразу); ярлыки PWA «Расход наличными», «Приход наличными», «Импорт выписки». Запись через `createTransaction`.
 - **5.2 Переводы и обмен:** связанные записи с общим `transfer_id`, в доходы и расходы не попадают; обмен валюты как две записи с разными знаками и валютами, курс из модулей сумм.
 - **5.3 Фирмы «Лина» и «Поло»:** опция «услуга» (процент любого знака); минус: перевод −100 на источнике, +100 на фирме и `fee` −5; плюс: дополнительный `income`; выдача наличных с фирмы переводом 1:1.
