@@ -139,3 +139,4 @@ input:not([type=checkbox]):not([type=radio]), select {
 .rate .chg { font-size: .85rem; }
 .chg.up { color: var(--up); }
 .chg.down { color: var(--danger); }
+.rates-title { margin: 8px 2px 4px; }

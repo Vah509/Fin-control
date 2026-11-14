@@ -1,6 +1,6 @@
 // Автообновление курсов: если на сегодня курса нет, берём курс у банка (по очереди, пока не получим).
-// Правило (решение 13.11.2026): консервативный курс, как если бы мы покупали базовую валюту у банка:
-// 1 база = (курс продажи банком базовой валюты) единиц другой валюты. Из двух валют банк даёт меньше.
+// Правило (решение 14.11.2026, заменило консервативный курс 13.11.2026): везде средний курс банка,
+// (покупка + продажа) / 2; один и тот же курс для показа на Главной и для всех пересчётов.
 // Курс сохраняется в fx_rates с датой дня и источником; прошлые срезы не меняются (принцип 5).
 // Сеть вне ядра: источники курсов передаются снаружи (интерфейс RateSource).
 import type { Currency, FxRate } from '../data/types'
@@ -21,26 +21,26 @@ export interface NewRate { baseKey: string; quoteKey: string; rate: string }
 const num = (v: number | null | undefined): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0
 const fmt = (v: number) => v.toFixed(8)
 
+/** Средний курс пары: (покупка + продажа) / 2; нужны оба значения. */
+const mid = (p: BankPair | undefined): number | null => (p && num(p.buy) && num(p.sell) ? (p.buy + p.sell) / 2 : null)
+
 /**
- * Курс для пересчёта валюты `cur` в базовую `base` по парам банка.
- * 1) банк продаёт базовую за cur: 1 base = sell cur (пара base/cur, курс продажи);
- * 2) банк покупает cur за базовую: 1 cur = buy base (пара cur/base, курс покупки);
- * 3) через общую валюту P (обычно UAH): cur→P по курсу покупки, P→base по курсу продажи.
+ * Курс для пересчёта валюты `cur` в базовую `base` по парам банка: средний между покупкой и продажей.
+ * 1) пара base/cur напрямую; 2) пара cur/base; 3) через общую валюту P (обычно UAH): mid(cur/P) / mid(base/P).
  */
-export function conservativeRate(base: Currency, cur: Currency, pairs: BankPair[]): NewRate | null {
+export function averageRate(base: Currency, cur: Currency, pairs: BankPair[]): NewRate | null {
   const B = base.code.toUpperCase(), C = cur.code.toUpperCase()
   const find = (a: string, b: string) => pairs.find((p) => p.a.toUpperCase() === a && p.b.toUpperCase() === b)
-  const sellBC = find(B, C)?.sell
-  if (num(sellBC)) return { baseKey: base.key, quoteKey: cur.key, rate: fmt(sellBC) }
-  const buyCB = find(C, B)?.buy
-  if (num(buyCB)) return { baseKey: cur.key, quoteKey: base.key, rate: fmt(buyCB) }
+  const bc = mid(find(B, C))
+  if (bc) return { baseKey: base.key, quoteKey: cur.key, rate: fmt(bc) }
+  const cb = mid(find(C, B))
+  if (cb) return { baseKey: cur.key, quoteKey: base.key, rate: fmt(cb) }
   const pivots = new Set<string>()
   for (const p of pairs) { pivots.add(p.a.toUpperCase()); pivots.add(p.b.toUpperCase()) }
   pivots.delete(B); pivots.delete(C)
   for (const P of [...pivots].sort((x, y) => (x === 'UAH' ? -1 : y === 'UAH' ? 1 : x.localeCompare(y)))) {
-    const buyCP = find(C, P)?.buy
-    const sellBP = find(B, P)?.sell
-    if (num(buyCP) && num(sellBP)) return { baseKey: cur.key, quoteKey: base.key, rate: fmt(buyCP / sellBP) }
+    const cp = mid(find(C, P)), bp = mid(find(B, P))
+    if (cp && bp) return { baseKey: cur.key, quoteKey: base.key, rate: fmt(cp / bp) }
   }
   return null
 }
@@ -96,7 +96,7 @@ export async function refreshFxRates(ctx: CoreContext, date: string, providers: 
       const still: string[] = []
       for (const key of remaining) {
         const cur = byKey.get(key)
-        const r = cur ? conservativeRate(base, cur, pairs) : null
+        const r = cur ? averageRate(base, cur, pairs) : null
         if (r) got.push({ source: p.source, rate: r }); else still.push(key)
       }
       remaining = still

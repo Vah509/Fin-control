@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  conservativeRate, createTransaction, fxFreshness, getSnapshot, refreshFxRates,
+  averageRate, createTransaction, fxFreshness, getSnapshot, refreshFxRates,
   type BankPair, type RateSource,
 } from '../src/core'
 import { parseMonobank, parsePrivat } from '../src/net/bankRates'
@@ -26,25 +26,25 @@ const src = (source: string, pairs: BankPair[] | Error): RateSource => ({
 })
 const today = '2026-11-13'
 
-describe('conservativeRate: берём курс, по которому банк продаёт базовую валюту', () => {
+describe('averageRate: средний между покупкой и продажей', () => {
   it('UAH → EUR: курс продажи евро (меньше евро за гривны)', () => {
-    expect(conservativeRate(eur, uah, mono)).toEqual({ baseKey: 'eur', quoteKey: 'uah', rate: '48.80000000' })
+    expect(averageRate(eur, uah, mono)).toEqual({ baseKey: 'eur', quoteKey: 'uah', rate: '48.40000000' })
   })
   it('USD → EUR: пара EUR/USD, курс продажи', () => {
-    expect(conservativeRate(eur, usd, mono)).toEqual({ baseKey: 'eur', quoteKey: 'usd', rate: '1.17000000' })
+    expect(averageRate(eur, usd, mono)).toEqual({ baseKey: 'eur', quoteKey: 'usd', rate: '1.16000000' })
   })
   it('USD → EUR без пары EUR/USD: через гривну, покупка USD / продажа EUR', () => {
-    const r = conservativeRate(eur, usd, privat)!
+    const r = averageRate(eur, usd, privat)!
     expect(r.baseKey).toBe('usd'); expect(r.quoteKey).toBe('eur')
-    expect(Number(r.rate)).toBeCloseTo(41.4 / 48.9, 6)
+    expect(Number(r.rate)).toBeCloseTo(41.75 / 48.4, 6)
   })
-  it('база UAH: USD → UAH по курсу покупки доллара', () => {
-    expect(conservativeRate(uah, usd, mono)).toEqual({ baseKey: 'usd', quoteKey: 'uah', rate: '41.50000000' })
+  it('база UAH: USD → UAH по среднему', () => {
+    expect(averageRate(uah, usd, mono)).toEqual({ baseKey: 'usd', quoteKey: 'uah', rate: '41.75000000' })
   })
   it('нет подходящих пар или нулевые курсы = null', () => {
-    expect(conservativeRate(eur, usd, [])).toBeNull()
-    expect(conservativeRate(eur, uah, [{ a: 'EUR', b: 'UAH', buy: 48, sell: 0 }])).toBeNull()
-    expect(conservativeRate(eur, uah, [{ a: 'EUR', b: 'UAH', buy: null, sell: null }])).toBeNull()
+    expect(averageRate(eur, usd, [])).toBeNull()
+    expect(averageRate(eur, uah, [{ a: 'EUR', b: 'UAH', buy: 48, sell: 0 }])).toBeNull()
+    expect(averageRate(eur, uah, [{ a: 'EUR', b: 'UAH', buy: null, sell: null }])).toBeNull()
   })
 })
 
@@ -79,7 +79,7 @@ describe('refreshFxRates', () => {
     expect(res).toMatchObject({ status: 'updated', sources: ['monobank'], missing: [] })
     const rows = await storage.listFxRates()
     expect(rows.map((r) => `${r.baseCurrencyKey}>${r.quoteCurrencyKey}=${r.rate}@${r.rateDate}/${r.source}`).sort()).toEqual([
-      'eur>uah=48.80000000@2026-11-13/monobank', 'eur>usd=1.17000000@2026-11-13/monobank',
+      'eur>uah=48.40000000@2026-11-13/monobank', 'eur>usd=1.16000000@2026-11-13/monobank',
     ])
   })
   it('курс на сегодня уже есть: сеть не вызывается', async () => {
@@ -133,13 +133,13 @@ describe('refreshFxRates', () => {
     const fr = await fxFreshness(ctx, today)
     expect(fr.needed).toEqual(['uah', 'usd'])   // eur — база
   })
-  it('срез после обновления считается в EUR консервативно', async () => {
+  it('срез после обновления считается в EUR по среднему курсу', async () => {
     const { ctx } = await setup()
-    await createTransaction(ctx, { accountId: ID.cashUah, bookedAt: '2026-11-13T08:00:00Z', type: 'income', amountMinor: 488000 })   // 4880.00 UAH
+    await createTransaction(ctx, { accountId: ID.cashUah, bookedAt: '2026-11-13T08:00:00Z', type: 'income', amountMinor: 484000 })   // 4840.00 UAH
     await refreshFxRates(ctx, today, [src('monobank', mono)])
     const snap = await getSnapshot(ctx, { date: today, accountIds: [ID.cashUah] })
     expect(snap.totals.complete).toBe(true)
-    expect(snap.rows[0]!.balance.minor).toBe(10000)   // 4880 / 48.8 = 100.00 EUR
+    expect(snap.rows[0]!.balance.minor).toBe(10000)   // 4840 / 48.4 = 100.00 EUR
   })
 })
 

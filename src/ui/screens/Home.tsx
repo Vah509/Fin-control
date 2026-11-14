@@ -28,6 +28,7 @@ export function Home() {
       {q.error && <ErrorBox text={q.error} onRetry={q.reload} />}
       {q.data && (
         <>
+          <p className="muted rates-title">Средние курсы на {dateRu(today)}:</p>
           <RatesCard rates={q.data.rates} />
           {q.data.snap.rows.length === 0
             ? <Notice kind="info">Остатков пока нет. Введите стартовый остаток по счёту.</Notice>
