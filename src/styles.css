@@ -96,7 +96,9 @@ input:not([type=checkbox]):not([type=radio]), select {
 .chip { display: inline-grid; place-items: center; border-radius: 10px; flex: none; line-height: 1; }
 .grow { flex: 1; min-width: 0; }
 .group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.group-head h2 { margin-top: 16px; }
+.group-head h2 { margin-top: 16px; flex: 1; }
+.group-head .drag-handle { margin-top: 12px; }
+.row .drag-handle { margin-right: 4px; }
 .ctl { display: inline-flex; gap: 6px; margin-top: 12px; }
 .inline-rename { display: flex; gap: 6px; align-items: center; flex: 1; margin-top: 12px; }
 .inline-rename input { flex: 1; min-width: 0; }

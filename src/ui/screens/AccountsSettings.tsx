@@ -23,21 +23,21 @@ function SectionList({ project, accounts, hidden, act }: {
         if (isDivider(id)) {
           return (
             <li key={id} ref={drag.setEl(id)} className={`row divider-row${drag.dragging === id ? ' dragging' : ''}`} style={drag.itemStyle(id, i)}>
+              <span className="drag-handle" aria-label="Перетащить разделитель" role="button" {...drag.handleProps(id)}>⠿</span>
               <div className="grow muted">— разделитель —</div>
               <button className="btn small" aria-label="Удалить разделитель" onClick={() => void act(() => saveProjectLayout(ctx, project.id, items.filter((x) => x !== id)))}>✕</button>
-              <span className="drag-handle" aria-label="Перетащить разделитель" role="button" {...drag.handleProps(id)}>⠿</span>
             </li>
           )
         }
         const a = byId.get(id)!
         return (
           <li key={id} ref={drag.setEl(id)} className={`row${drag.dragging === id ? ' dragging' : ''}`} style={drag.itemStyle(id, i)}>
+            <span className="drag-handle" aria-label="Перетащить" role="button" {...drag.handleProps(id)}>⠿</span>
             <AccountChip account={a} />
             <div className="row-main grow">
               <span className="row-title">{a.name}</span>
               {hidden.includes(id) && <span className="row-sub">скрыт со страницы</span>}
             </div>
-            <span className="drag-handle" aria-label="Перетащить" role="button" {...drag.handleProps(id)}>⠿</span>
           </li>
         )
       })}
@@ -97,6 +97,7 @@ export function AccountsSettingsScreen() {
             return (
               <div key={pid} ref={pdrag.setEl(pid)} className={`group${pdrag.dragging === pid ? ' dragging' : ''}`} style={pdrag.itemStyle(pid, pi)}>
                 <div className="group-head">
+                  <span className="drag-handle" aria-label="Перетащить раздел" role="button" {...pdrag.handleProps(pid)}>⠿</span>
                   {renaming?.id === pid ? (
                     <form className="inline-rename" onSubmit={(e) => {
                       e.preventDefault()
@@ -112,7 +113,6 @@ export function AccountsSettingsScreen() {
                       <button className="btn small" aria-label="Добавить разделитель"
                         onClick={() => void act(() => saveProjectLayout(ctx, pid, [newDividerId(ctx), ...projectItems(ref.layout, pid, accs)]))}>―</button>
                       <button className="btn small" aria-label="Переименовать раздел" onClick={() => setRenaming({ id: pid, name: p.name })}>✎</button>
-                      <span className="drag-handle" aria-label="Перетащить раздел" role="button" {...pdrag.handleProps(pid)}>⠿</span>
                     </span>
                   )}
                 </div>
