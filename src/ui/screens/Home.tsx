@@ -1,8 +1,8 @@
-import { getCheckpointDiffs, getSnapshot } from '../../core'
+import { getCheckpointDiffs, getDisplayRates, getSnapshot } from '../../core'
 import { useApp } from '../app'
 import { useLoad } from '../hooks'
 import { dateRu, todayLocal } from '../format'
-import { ErrorBox, Loading, Notice, Screen, TotalsCard } from '../parts'
+import { ErrorBox, Loading, Notice, RatesCard, Screen, TotalsCard } from '../parts'
 
 export function Home() {
   const { ctx, go, fx, refreshFx } = useApp()
@@ -12,7 +12,7 @@ export function Home() {
     const diffs = snap.rows.length
       ? (await getCheckpointDiffs(ctx, { accountIds: snap.rows.map((r) => r.accountId), throughDate: today })).filter((d) => d.diffMinor !== 0)
       : []
-    return { snap, diffs }
+    return { snap, diffs, rates: await getDisplayRates(ctx, today) }
   }, [today])
 
   return (
@@ -28,6 +28,7 @@ export function Home() {
       {q.error && <ErrorBox text={q.error} onRetry={q.reload} />}
       {q.data && (
         <>
+          <RatesCard rates={q.data.rates} />
           {q.data.snap.rows.length === 0
             ? <Notice kind="info">Остатков пока нет. Введите стартовый остаток по счёту.</Notice>
             : <TotalsCard totals={q.data.snap.totals} />}

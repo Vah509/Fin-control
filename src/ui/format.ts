@@ -50,6 +50,14 @@ export function money(minor: number, decimals: number): string {
   return (neg ? '−' : '') + grouped + (frac ? ',' + frac : '')
 }
 
+/** Изменение курса: «▲ +0,12» зелёным, «▼ −0,15» красным; 0 и «нет данных» без стрелки. */
+export function rateChange(deltaScaled: number | null, digits: number): { text: string; dir: 'up' | 'down' | 'none' } {
+  if (deltaScaled === null) return { text: '—', dir: 'none' }
+  if (deltaScaled === 0) return { text: money(0, digits), dir: 'none' }
+  const abs = money(Math.abs(deltaScaled), digits)
+  return deltaScaled > 0 ? { text: `▲ +${abs}`, dir: 'up' } : { text: `▼ −${abs}`, dir: 'down' }
+}
+
 export type AmountParse = { minor: number } | { error: string } | null
 
 /** Ввод суммы: запятая как точка, пробелы игнорируются. Пустая строка = null. */

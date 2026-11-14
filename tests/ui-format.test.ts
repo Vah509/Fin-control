@@ -33,3 +33,14 @@ describe('форматирование для экранов', () => {
     expect(lastDayOfPreviousMonth(new Date(2026, 2, 1))).toBe('2026-02-28')
   })
 })
+
+import { rateChange } from '../src/ui/format'
+describe('rateChange', () => {
+  it('рост, падение, ноль, нет данных', () => {
+    expect(rateChange(12, 2)).toEqual({ text: '▲ +0,12', dir: 'up' })
+    expect(rateChange(-15, 2)).toEqual({ text: '▼ −0,15', dir: 'down' })
+    expect(rateChange(0, 2)).toEqual({ text: '0,00', dir: 'none' })
+    expect(rateChange(null, 4)).toEqual({ text: '—', dir: 'none' })
+    expect(rateChange(5, 4).text).toBe('▲ +0,0005')
+  })
+})

@@ -1,9 +1,9 @@
 // Общие небольшие компоненты экранов.
 import type { ReactNode } from 'react'
 import type { Account, AccountType } from '../data/types'
-import { COLORS, ICONS, resolveAppearance, type CheckpointDiff, type ColorKey, type GroupBy, type IconKey, type SnapshotRow, type SnapshotTotals } from '../core'
+import { COLORS, ICONS, type DisplayRate, resolveAppearance, type CheckpointDiff, type ColorKey, type GroupBy, type IconKey, type SnapshotRow, type SnapshotTotals } from '../core'
 import { useApp, type RefData } from './app'
-import { dateRu, money } from './format'
+import { dateRu, money, rateChange } from './format'
 
 export const TYPE_LABELS: Record<AccountType, string> = {
   bank: 'Банки', wallet: 'Кошельки', broker: 'Брокер', cash: 'Наличные', person: 'У людей', firm: 'Фирмы',
@@ -156,6 +156,24 @@ export function AppearancePicker({ color, icon, onColor, onIcon }: {
             className={i === icon ? 'icon on' : 'icon'} onClick={() => onIcon(i)}>{ICONS[i]}</button>
         ))}
       </div>
+    </div>
+  )
+}
+
+export function RatesCard({ rates }: { rates: DisplayRate[] }) {
+  const { code } = useCurrencyFormat()
+  return (
+    <div className="rates">
+      {rates.map((r) => {
+        const ch = rateChange(r.deltaScaled, r.digits)
+        return (
+          <div key={`${r.from}${r.to}`} className="card rate">
+            <div className="pair">{code(r.from)}/{code(r.to)}</div>
+            <div className="val">{r.valueScaled === null ? 'нет курса' : money(r.valueScaled, r.digits)}</div>
+            <div className={`chg ${ch.dir}`}>{r.valueScaled === null ? '—' : ch.text}</div>
+          </div>
+        )
+      })}
     </div>
   )
 }
