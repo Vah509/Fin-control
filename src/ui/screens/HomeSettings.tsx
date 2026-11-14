@@ -65,7 +65,7 @@ export function HomeSettingsScreen() {
   const byId = new Map(projects.map((p) => [p.id, p]))
 
   return (
-    <Screen title="Главный экран" back={<BackButton to="settings" />}>
+    <Screen title="Настройки главного экрана" back={<BackButton to="settings" />}>
       {error && <ErrorBox text={error} />}
       {!owner && <p className="muted pad">Менять может только владелец.</p>}
 

@@ -16,6 +16,7 @@ import { MoreScreen } from './ui/screens/More'
 import { PeriodsScreen } from './ui/screens/Periods'
 import { DumpScreen } from './ui/screens/Dump'
 import { SettingsScreen } from './ui/screens/Settings'
+import { BaseCurrencyScreen } from './ui/screens/BaseCurrency'
 import { HomeSettingsScreen } from './ui/screens/HomeSettings'
 import { AccountScreen } from './ui/screens/Account'
 import { NewAccountScreen } from './ui/screens/NewAccount'
@@ -32,7 +33,7 @@ const TABS: { page: Page; label: string; icon: string }[] = [
 ]
 const TAB_OF: Record<Page, Page> = {
   home: 'home', balance: 'home', snapshot: 'snapshot', moves: 'moves', accounts: 'accounts',
-  more: 'more', periods: 'more', dump: 'more', settings: 'more', homeSettings: 'more', account: 'accounts', newAccount: 'accounts',
+  more: 'more', periods: 'more', dump: 'more', settings: 'more', baseCurrency: 'more', homeSettings: 'more', account: 'accounts', newAccount: 'accounts',
 }
 
 /** Ярлыки PWA: /?go=snapshot и /?go=balance. */
@@ -153,6 +154,7 @@ export function Shell({ db, ctx, initialRef, email }: { db: SupabaseClient; ctx:
           {page === 'periods' && <PeriodsScreen />}
           {page === 'dump' && <DumpScreen />}
           {page === 'settings' && <SettingsScreen />}
+          {page === 'baseCurrency' && <BaseCurrencyScreen />}
           {page === 'homeSettings' && <HomeSettingsScreen />}
           {page === 'account' && accountId && <AccountScreen accountId={accountId} />}
           {page === 'newAccount' && <NewAccountScreen />}
