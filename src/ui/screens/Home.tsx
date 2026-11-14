@@ -1,4 +1,4 @@
-import { getCheckpointDiffs, getDisplayRates, getSnapshot, isDivider, projectItems, sectionTotals, visibleItems, type HomeBlock } from '../../core'
+import { getCheckpointDiffs, getDisplayRates, getSnapshot, isDivider, orderProjects, projectItems, sectionTotals, visibleItems, type HomeBlock } from '../../core'
 import { useApp } from '../app'
 import { useLoad } from '../hooks'
 import { dateRu, todayLocal } from '../format'
@@ -26,6 +26,7 @@ export function Home() {
   function block(b: HomeBlock) {
     const d = q.data!
     if (b === 'rates') {
+      if (!h.showRates) return null
       return (
         <div key={b}>
           <p className="muted rates-title">Средние курсы на {dateRu(today)}:</p>
@@ -34,45 +35,36 @@ export function Home() {
       )
     }
     if (b === 'accounts') {
+      if (!h.showAccounts) return null
+      const totals = sectionTotals(d.snap)
+      const base = d.snap.totals.baseCurrency
       return (
         <div key={b}>
-          {ref.projects.map((p) => {
+          {orderProjects(h.projectOrder, ref.projects).map((p) => {
             const accs = shown.filter((a) => a.projectId === p.id)
             if (accs.length === 0) return null
-            const items = projectItems(ref.layout, p.id, accs)
+            const items = projectItems(h.layout, p.id, accs)
             const list = h.showDividers ? visibleItems(items) : items.filter((id) => !isDivider(id))
+            const t = totals.get(p.id)
             return (
               <div key={p.id} className="group">
-                <div className="group-head"><h2>{p.name}</h2></div>
+                <div className="group-head">
+                  <h2>{p.name}</h2>
+                  {h.showSectionTotals && t && (
+                    <span className={t.complete ? 'group-total' : 'group-total warn-text'}>{t.complete ? fmt(t.baseMinor, base) : 'нет курса'}</span>
+                  )}
+                </div>
                 <ul className="plain rows">
                   {list.map((id) => {
                     if (isDivider(id)) return <li key={id} className="divider" aria-hidden="true" />
                     const a = accs.find((x) => x.id === id)!
                     const row = rowOf(a.id)
-                    return row ? <AccountRow key={id} row={row} baseCurrency={d.snap.totals.baseCurrency} onClick={() => go('account', { accountId: id })} /> : null
+                    return row ? <AccountRow key={id} row={row} baseCurrency={base} onClick={() => go('account', { accountId: id })} /> : null
                   })}
                 </ul>
               </div>
             )
           })}
-        </div>
-      )
-    }
-    if (b === 'sections') {
-      if (!h.showSections) return null
-      const t = sectionTotals(d.snap)
-      const list = ref.projects.filter((p) => t.has(p.id))
-      if (list.length === 0) return null
-      const base = d.snap.totals.baseCurrency
-      return (
-        <div key={b} className="card totals">
-          <div className="label">Итоги по разделам</div>
-          <ul className="plain">
-            {list.map((p) => {
-              const x = t.get(p.id)!
-              return <li key={p.id}><span>{p.name}</span>{x.complete ? <b>{fmt(x.baseMinor, base)}</b> : <b className="warn-text">нет курса</b>}</li>
-            })}
-          </ul>
         </div>
       )
     }
