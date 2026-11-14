@@ -29,7 +29,7 @@ export async function loadRef(ctx: CoreContext): Promise<RefData> {
   }
 }
 
-export type Page = 'home' | 'snapshot' | 'moves' | 'accounts' | 'more' | 'balance' | 'periods' | 'dump' | 'account' | 'newAccount'
+export type Page = 'home' | 'snapshot' | 'moves' | 'accounts' | 'more' | 'balance' | 'periods' | 'dump' | 'settings' | 'account' | 'newAccount'
 export interface NavOptions { accountId?: string }
 
 export interface AppApi {

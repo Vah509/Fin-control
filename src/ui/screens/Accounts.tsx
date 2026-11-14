@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import {
-  createProject, getSnapshot, isDivider, newDividerId, projectItems, reorderProjects, saveProjectLayout, setAccountArchived,
+  createProject, getSnapshot, isDivider, sectionTotals, newDividerId, projectItems, reorderProjects, saveProjectLayout, setAccountArchived,
   updateProject, visibleItems, type SnapshotRow,
 } from '../../core'
 import type { Account, Project } from '../../data/types'
 import { useApp } from '../app'
 import { useLoad } from '../hooks'
 import { errorText, todayLocal } from '../format'
-import { AccountChip, AccountRow, ErrorBox, Loading, Screen } from '../parts'
+import { AccountChip, AccountRow, ErrorBox, Loading, Screen, useCurrencyFormat } from '../parts'
 import { useDragSort } from '../dragSort'
 
 /** Список счетов одного раздела; в режиме порядка элементы перетаскиваются за ручку ⠿. */
@@ -67,6 +67,8 @@ export function AccountsScreen() {
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const base = q.data?.totals.baseCurrency ?? ''
+  const { fmt } = useCurrencyFormat()
+  const totals = q.data ? sectionTotals(q.data) : null
   const rowOf = (id: string) => q.data?.rows.find((r) => r.accountId === id)
 
   async function act(fn: () => Promise<unknown>) {
@@ -108,6 +110,11 @@ export function AccountsScreen() {
                   <button type="button" className="btn small" onClick={() => setRenaming(null)}>Отмена</button>
                 </form>
               ) : <h2>{p.name}</h2>}
+              {!edit && renaming?.id !== p.id && totals?.get(p.id) && (
+                <span className={totals.get(p.id)!.complete ? 'group-total' : 'group-total warn-text'}>
+                  {totals.get(p.id)!.complete ? fmt(totals.get(p.id)!.baseMinor, base) : 'нет курса'}
+                </span>
+              )}
               {edit && renaming?.id !== p.id && (
                 <span className="ctl">
                   {accs.length > 0 && (

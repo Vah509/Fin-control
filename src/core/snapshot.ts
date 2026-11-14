@@ -134,3 +134,14 @@ export async function getUnaccounted(
   }
   return out
 }
+
+export interface SectionTotal { projectId: string; baseMinor: number; complete: boolean; missingRateCurrencies: string[] }
+
+/** Итого по каждому разделу в базовой валюте. `complete = false`: у части счетов нет курса, сумму показывать нельзя. */
+export function sectionTotals(s: Snapshot): Map<string, SectionTotal> {
+  const out = new Map<string, SectionTotal>()
+  for (const g of groupSnapshot(s, 'project')) {
+    out.set(g.groupKey, { projectId: g.groupKey, baseMinor: g.totals.baseMinor, complete: g.totals.complete, missingRateCurrencies: g.totals.missingRateCurrencies })
+  }
+  return out
+}
