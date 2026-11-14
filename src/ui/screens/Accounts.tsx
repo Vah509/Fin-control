@@ -1,67 +1,52 @@
 import { Fragment, useState } from 'react'
 import {
-  createProject, getSnapshot, groupTotalsByDividers, isDivider, sectionTotals, newDividerId, projectItems, reorderProjects, saveProjectLayout, setAccountArchived,
-  updateProject, visibleItems, type SnapshotRow,
+  createProject, getSnapshot, groupTotalsByDividers, isDivider, sectionTotals, projectItems, setAccountArchived,
+  visibleItems, type SnapshotRow,
 } from '../../core'
 import type { Account, Project } from '../../data/types'
 import { useApp } from '../app'
 import { useLoad } from '../hooks'
 import { errorText, todayLocal } from '../format'
 import { AccountChip, AccountRow, ErrorBox, Loading, Screen, useCurrencyFormat } from '../parts'
-import { useDragSort } from '../dragSort'
 
-/** Список счетов одного раздела; в режиме порядка элементы перетаскиваются за ручку ⠿. */
-function AccountList({ project, accounts, edit, base, rows, rowOf, act }: {
+/** Список счетов одного раздела (только просмотр; порядок и разделители меняются в «Настройки страницы «Счета»»). */
+function AccountList({ project, accounts, base, rows, rowOf }: {
   project: Project
   accounts: Account[]
-  edit: boolean
   base: string
   rows: SnapshotRow[]
   rowOf: (id: string) => SnapshotRow | undefined
-  act: (fn: () => Promise<unknown>) => Promise<void>
 }) {
-  const { ctx, ref, go } = useApp()
+  const { ref, go } = useApp()
   const { fmt } = useCurrencyFormat()
-  const items = projectItems(ref.layout, project.id, accounts)
-  const shown = edit ? items : visibleItems(items)
-  const groups = !edit && ref.accountsView.showGroupTotals ? groupTotalsByDividers(shown, rows, base) : []
+  const shown = visibleItems(projectItems(ref.layout, project.id, accounts))
+  const groups = ref.accountsView.showGroupTotals ? groupTotalsByDividers(shown, rows, base) : []
   const headOf = new Map(groups.map((g) => [g.ids[0]!, g]))
   const withHeads = groups.length > 1
-  const drag = useDragSort(shown, edit, (next) => act(() => saveProjectLayout(ctx, project.id, next)))
   const byId = new Map(accounts.map((a) => [a.id, a]))
   return (
     <ul className="plain rows">
-      {drag.order.map((id, i) => {
-        if (isDivider(id)) {
-          return edit ? (
-            <li key={id} ref={drag.setEl(id)} className={`row divider-row${drag.dragging === id ? ' dragging' : ''}`} style={drag.itemStyle(id, i)}>
-              <div className="grow muted">— разделитель —</div>
-              <button className="btn small" aria-label="Удалить разделитель" onClick={() => void act(() => saveProjectLayout(ctx, project.id, items.filter((x) => x !== id)))}>✕</button>
-              <span className="drag-handle" aria-label="Перетащить разделитель" role="button" {...drag.handleProps(id)}>⠿</span>
-            </li>
-          ) : withHeads ? null : <li key={id} className="divider" aria-hidden="true" />
-        }
+      {shown.map((id, i) => {
+        if (isDivider(id)) return withHeads ? null : <li key={id} className="divider" aria-hidden="true" />
         const a = byId.get(id)!
         const row = rowOf(a.id)
-        return edit ? (
-          <li key={a.id} ref={drag.setEl(a.id)} className={`row${drag.dragging === a.id ? ' dragging' : ''}`} style={drag.itemStyle(a.id, i)}>
-            <AccountChip account={a} />
-            <div className="row-main grow"><span className="row-title">{a.name}</span></div>
-            <span className="drag-handle" aria-label="Перетащить" role="button" {...drag.handleProps(a.id)}>⠿</span>
-          </li>
-        ) : row ? (
+        if (!row) {
+          return (
+            <li key={a.id} className="row tap" onClick={() => go('account', { accountId: a.id })}>
+              <AccountChip account={a} /><div className="row-main grow"><span className="row-title">{a.name}</span></div>
+            </li>
+          )
+        }
+        const g = withHeads ? headOf.get(a.id) : undefined
+        return (
           <Fragment key={a.id}>
-            {headOf.get(a.id) && withHeads && (
+            {g && (
               <li className={i === 0 ? 'subhead first' : 'subhead'} aria-hidden="true">
-                <span className={headOf.get(a.id)!.complete ? '' : 'warn-text'}>{headOf.get(a.id)!.complete ? fmt(headOf.get(a.id)!.baseMinor, base) : 'нет курса'}</span>
+                <span className={g.complete ? '' : 'warn-text'}>{g.complete ? fmt(g.baseMinor, base) : 'нет курса'}</span>
               </li>
             )}
             <AccountRow row={row} baseCurrency={base} onClick={() => go('account', { accountId: a.id })} />
           </Fragment>
-        ) : (
-          <li key={a.id} className="row tap" onClick={() => go('account', { accountId: a.id })}>
-            <AccountChip account={a} /><div className="row-main grow"><span className="row-title">{a.name}</span></div>
-          </li>
         )
       })}
     </ul>
@@ -73,11 +58,9 @@ export function AccountsScreen() {
   const hidden = ref.accountsView.hiddenAccounts
   const includedIds = ref.accounts.filter((a) => !hidden.includes(a.id)).map((a) => a.id)
   const q = useLoad(() => getSnapshot(ctx, { date: today, accountIds: includedIds }), [today, includedIds.join(',')])
-  const [edit, setEdit] = useState(false)
   const [adding, setAdding] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [newName, setNewName] = useState('')
-  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const base = q.data?.totals.baseCurrency ?? ''
@@ -89,8 +72,6 @@ export function AccountsScreen() {
     setError(null)
     try { await fn(); await reloadRef(); bump() } catch (e) { setError(errorText(e)) }
   }
-  const pdrag = useDragSort(ref.projects.map((p) => p.id), edit, (next) => act(() => reorderProjects(ctx, next)))
-  const projectById = new Map(ref.projects.map((p) => [p.id, p]))
   const archived = ref.accounts.filter((a) => a.archivedAt)
 
   return (
@@ -107,41 +88,17 @@ export function AccountsScreen() {
       {error && <ErrorBox text={error} />}
       {q.loading && <Loading />}
       {q.error && <ErrorBox text={q.error} onRetry={q.reload} />}
-      {q.data && pdrag.order.map((pid, pi) => {
-        const p = projectById.get(pid)!
+      {q.data && ref.projects.map((p) => {
         const accs = ref.accounts.filter((a) => a.projectId === p.id && !a.archivedAt && !hidden.includes(a.id))
-        if (accs.length === 0 && !edit) return null
+        if (accs.length === 0) return null
+        const t = totals?.get(p.id)
         return (
-          <div key={p.id} ref={pdrag.setEl(p.id)} className={`group${pdrag.dragging === p.id ? ' dragging' : ''}`} style={pdrag.itemStyle(p.id, pi)}>
+          <div key={p.id} className="group">
             <div className="group-head">
-              {renaming?.id === p.id ? (
-                <form className="inline-rename" onSubmit={(e) => {
-                  e.preventDefault()
-                  void act(async () => { await updateProject(ctx, p.id, { name: renaming.name }); setRenaming(null) })
-                }}>
-                  <input value={renaming.name} onChange={(e) => setRenaming({ id: p.id, name: e.target.value })} maxLength={60} autoFocus />
-                  <button className="btn small primary" disabled={!renaming.name.trim()}>OK</button>
-                  <button type="button" className="btn small" onClick={() => setRenaming(null)}>Отмена</button>
-                </form>
-              ) : <h2>{p.name}</h2>}
-              {!edit && renaming?.id !== p.id && totals?.get(p.id) && (
-                <span className={totals.get(p.id)!.complete ? 'group-total' : 'group-total warn-text'}>
-                  {totals.get(p.id)!.complete ? fmt(totals.get(p.id)!.baseMinor, base) : 'нет курса'}
-                </span>
-              )}
-              {edit && renaming?.id !== p.id && (
-                <span className="ctl">
-                  {accs.length > 0 && (
-                    <button className="btn small" aria-label="Добавить разделитель"
-                      onClick={() => void act(() => saveProjectLayout(ctx, p.id, [newDividerId(ctx), ...projectItems(ref.layout, p.id, accs)]))}>―</button>
-                  )}
-                  <button className="btn small" aria-label="Переименовать раздел" onClick={() => setRenaming({ id: p.id, name: p.name })}>✎</button>
-                  <span className="drag-handle" aria-label="Перетащить раздел" role="button" {...pdrag.handleProps(p.id)}>⠿</span>
-                </span>
-              )}
+              <h2>{p.name}</h2>
+              {t && <span className={t.complete ? 'group-total' : 'group-total warn-text'}>{t.complete ? fmt(t.baseMinor, base) : 'нет курса'}</span>}
             </div>
-            {accs.length === 0 && <p className="muted pad">В разделе нет счетов.</p>}
-            {accs.length > 0 && <AccountList project={p} accounts={accs} edit={edit} base={base} rows={q.data!.rows} rowOf={rowOf} act={act} />}
+            <AccountList project={p} accounts={accs} base={base} rows={q.data!.rows} rowOf={rowOf} />
           </div>
         )
       })}
@@ -161,23 +118,15 @@ export function AccountsScreen() {
           )}
         </div>
       )}
-      {edit && <p className="muted pad">Удерживайте ⠿ и перетащите счёт, разделитель или раздел на нужное место. Кнопка ― в заголовке раздела добавляет разделитель (вверху списка), ✕ удаляет. Чтобы перенести счёт в другой раздел, откройте его карточку.</p>}
       <div className="fab-space" aria-hidden="true" />
-      {edit ? (
-        <button className="fab fab-done" onClick={() => setEdit(false)}>Готово</button>
-      ) : (
-        <>
-          {menuOpen && <div className="fab-backdrop" onClick={() => setMenuOpen(false)} />}
-          {menuOpen && (
-            <ul className="plain fab-menu" role="menu">
-              <li><button role="menuitem" onClick={() => { setMenuOpen(false); go('newAccount') }}>Новый счёт</button></li>
-              <li><button role="menuitem" onClick={() => { setMenuOpen(false); setAdding(true); window.scrollTo(0, 0) }}>Новый раздел</button></li>
-              <li><button role="menuitem" onClick={() => { setMenuOpen(false); setEdit(true) }}>Изменить порядок</button></li>
-            </ul>
-          )}
-          <button className="fab" aria-label="Меню" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>{menuOpen ? '✕' : '☰'}</button>
-        </>
+      {menuOpen && <div className="fab-backdrop" onClick={() => setMenuOpen(false)} />}
+      {menuOpen && (
+        <ul className="plain fab-menu" role="menu">
+          <li><button role="menuitem" onClick={() => { setMenuOpen(false); go('newAccount') }}>Новый счёт</button></li>
+          <li><button role="menuitem" onClick={() => { setMenuOpen(false); setAdding(true); window.scrollTo(0, 0) }}>Новый раздел</button></li>
+        </ul>
       )}
+      <button className="fab" aria-label="Меню" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>{menuOpen ? '✕' : '☰'}</button>
     </Screen>
   )
 }

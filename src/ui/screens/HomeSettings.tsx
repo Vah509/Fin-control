@@ -107,7 +107,7 @@ export function HomeSettingsScreen() {
       <div className="card form">
         <div className="label">Блок «Счета»: оформление</div>
         <label className="check"><input type="checkbox" checked={h.showSectionTotals} disabled={!owner} onChange={() => void save({ ...h, showSectionTotals: !h.showSectionTotals })} />Сумма раздела справа от названия</label>
-        <label className="check"><input type="checkbox" checked={h.showGroupTotals} disabled={!owner || !h.showDividers} onChange={() => void save({ ...h, showGroupTotals: !h.showGroupTotals })} />Сумма группы над счетами (между разделителями)</label>
+        <label className="check"><input type="checkbox" checked={h.showGroupTotals} disabled={!owner || !h.showDividers} onChange={() => void save({ ...h, showGroupTotals: !h.showGroupTotals })} />Сумма группы счетов между разделителями</label>
         <label className="check"><input type="checkbox" checked={h.showDividers} disabled={!owner} onChange={() => void save({ ...h, showDividers: !h.showDividers })} />Разделители между счетами</label>
       </div>
 
