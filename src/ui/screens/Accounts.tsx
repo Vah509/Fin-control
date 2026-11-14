@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import {
-  createProject, getSnapshot, isDivider, sectionTotals, newDividerId, projectItems, reorderProjects, saveProjectLayout, setAccountArchived,
+  createProject, getSnapshot, groupTotalsByDividers, isDivider, sectionTotals, newDividerId, projectItems, reorderProjects, saveProjectLayout, setAccountArchived,
   updateProject, visibleItems, type SnapshotRow,
 } from '../../core'
 import type { Account, Project } from '../../data/types'
@@ -11,17 +11,22 @@ import { AccountChip, AccountRow, ErrorBox, Loading, Screen, useCurrencyFormat }
 import { useDragSort } from '../dragSort'
 
 /** Список счетов одного раздела; в режиме порядка элементы перетаскиваются за ручку ⠿. */
-function AccountList({ project, accounts, edit, base, rowOf, act }: {
+function AccountList({ project, accounts, edit, base, rows, rowOf, act }: {
   project: Project
   accounts: Account[]
   edit: boolean
   base: string
+  rows: SnapshotRow[]
   rowOf: (id: string) => SnapshotRow | undefined
   act: (fn: () => Promise<unknown>) => Promise<void>
 }) {
   const { ctx, ref, go } = useApp()
+  const { fmt } = useCurrencyFormat()
   const items = projectItems(ref.layout, project.id, accounts)
   const shown = edit ? items : visibleItems(items)
+  const groups = !edit && ref.accountsView.showGroupTotals ? groupTotalsByDividers(shown, rows, base) : []
+  const headOf = new Map(groups.map((g) => [g.ids[0]!, g]))
+  const withHeads = groups.length > 1
   const drag = useDragSort(shown, edit, (next) => act(() => saveProjectLayout(ctx, project.id, next)))
   const byId = new Map(accounts.map((a) => [a.id, a]))
   return (
@@ -34,7 +39,7 @@ function AccountList({ project, accounts, edit, base, rowOf, act }: {
               <button className="btn small" aria-label="Удалить разделитель" onClick={() => void act(() => saveProjectLayout(ctx, project.id, items.filter((x) => x !== id)))}>✕</button>
               <span className="drag-handle" aria-label="Перетащить разделитель" role="button" {...drag.handleProps(id)}>⠿</span>
             </li>
-          ) : <li key={id} className="divider" aria-hidden="true" />
+          ) : withHeads ? null : <li key={id} className="divider" aria-hidden="true" />
         }
         const a = byId.get(id)!
         const row = rowOf(a.id)
@@ -45,7 +50,14 @@ function AccountList({ project, accounts, edit, base, rowOf, act }: {
             <span className="drag-handle" aria-label="Перетащить" role="button" {...drag.handleProps(a.id)}>⠿</span>
           </li>
         ) : row ? (
-          <AccountRow key={a.id} row={row} baseCurrency={base} onClick={() => go('account', { accountId: a.id })} />
+          <Fragment key={a.id}>
+            {headOf.get(a.id) && withHeads && (
+              <li className={i === 0 ? 'subhead first' : 'subhead'} aria-hidden="true">
+                <span className={headOf.get(a.id)!.complete ? '' : 'warn-text'}>{headOf.get(a.id)!.complete ? fmt(headOf.get(a.id)!.baseMinor, base) : 'нет курса'}</span>
+              </li>
+            )}
+            <AccountRow row={row} baseCurrency={base} onClick={() => go('account', { accountId: a.id })} />
+          </Fragment>
         ) : (
           <li key={a.id} className="row tap" onClick={() => go('account', { accountId: a.id })}>
             <AccountChip account={a} /><div className="row-main grow"><span className="row-title">{a.name}</span></div>
@@ -58,7 +70,9 @@ function AccountList({ project, accounts, edit, base, rowOf, act }: {
 export function AccountsScreen() {
   const { ctx, ref, go, bump, reloadRef } = useApp()
   const today = todayLocal()
-  const q = useLoad(() => getSnapshot(ctx, { date: today }), [today])
+  const hidden = ref.accountsView.hiddenAccounts
+  const includedIds = ref.accounts.filter((a) => !hidden.includes(a.id)).map((a) => a.id)
+  const q = useLoad(() => getSnapshot(ctx, { date: today, accountIds: includedIds }), [today, includedIds.join(',')])
   const [edit, setEdit] = useState(false)
   const [adding, setAdding] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -95,7 +109,7 @@ export function AccountsScreen() {
       {q.error && <ErrorBox text={q.error} onRetry={q.reload} />}
       {q.data && pdrag.order.map((pid, pi) => {
         const p = projectById.get(pid)!
-        const accs = ref.accounts.filter((a) => a.projectId === p.id && !a.archivedAt)
+        const accs = ref.accounts.filter((a) => a.projectId === p.id && !a.archivedAt && !hidden.includes(a.id))
         if (accs.length === 0 && !edit) return null
         return (
           <div key={p.id} ref={pdrag.setEl(p.id)} className={`group${pdrag.dragging === p.id ? ' dragging' : ''}`} style={pdrag.itemStyle(p.id, pi)}>
@@ -127,7 +141,7 @@ export function AccountsScreen() {
               )}
             </div>
             {accs.length === 0 && <p className="muted pad">В разделе нет счетов.</p>}
-            {accs.length > 0 && <AccountList project={p} accounts={accs} edit={edit} base={base} rowOf={rowOf} act={act} />}
+            {accs.length > 0 && <AccountList project={p} accounts={accs} edit={edit} base={base} rows={q.data!.rows} rowOf={rowOf} act={act} />}
           </div>
         )
       })}

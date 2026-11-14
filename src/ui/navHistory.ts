@@ -2,7 +2,7 @@
 import type { Page } from './app'
 
 export const PAGES: readonly Page[] = [
-  'home', 'snapshot', 'moves', 'accounts', 'more', 'balance', 'periods', 'dump', 'account', 'newAccount',
+  'home', 'snapshot', 'moves', 'accounts', 'more', 'balance', 'periods', 'dump', 'settings', 'baseCurrency', 'homeSettings', 'accountsSettings', 'account', 'newAccount',
 ]
 
 /** Состояние, которое лежит в записи истории браузера. `idx` = номер записи внутри приложения (0 = первая). */

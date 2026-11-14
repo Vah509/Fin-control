@@ -1,7 +1,7 @@
 // Контекст приложения: ядро с хранилищем Supabase, справочники, навигация. Экраны вызывают только ядро.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type DependencyList } from 'react'
 import {
-  createContext as createCoreContext, readHomeSettings, readLayout, readSettings, type CoreContext, type HomeSettings, type Layout, type Settings,
+  createContext as createCoreContext, readAccountsView, readHomeSettings, readLayout, readSettings, type AccountsView, type CoreContext, type HomeSettings, type Layout, type Settings,
 } from '../core'
 import type { Account, Country, Currency, Institution, Project } from '../data/types'
 import { SupabaseStorage } from '../data/supabase'
@@ -14,6 +14,8 @@ export interface RefData {
   layout: Layout
   /** Настройка Главной (home_layout). */
   home: HomeSettings
+  /** Настройка страницы «Счета» (accounts_view). */
+  accountsView: AccountsView
   cur: Map<string, Currency>
 }
 
@@ -26,12 +28,12 @@ export async function loadRef(ctx: CoreContext): Promise<RefData> {
   accounts.sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
   projects.sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
   return {
-    accounts, projects, countries, currencies, institutions, settings: readSettings(settingsRows), layout: readLayout(settingsRows), home: readHomeSettings(settingsRows),
+    accounts, projects, countries, currencies, institutions, settings: readSettings(settingsRows), layout: readLayout(settingsRows), home: readHomeSettings(settingsRows), accountsView: readAccountsView(settingsRows),
     cur: new Map(currencies.map((c) => [c.key, c])),
   }
 }
 
-export type Page = 'home' | 'snapshot' | 'moves' | 'accounts' | 'more' | 'balance' | 'periods' | 'dump' | 'settings' | 'baseCurrency' | 'homeSettings' | 'account' | 'newAccount'
+export type Page = 'home' | 'snapshot' | 'moves' | 'accounts' | 'more' | 'balance' | 'periods' | 'dump' | 'settings' | 'baseCurrency' | 'homeSettings' | 'accountsSettings' | 'account' | 'newAccount'
 export interface NavOptions { accountId?: string }
 
 export interface AppApi {

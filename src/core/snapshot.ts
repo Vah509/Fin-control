@@ -135,6 +135,26 @@ export async function getUnaccounted(
   return out
 }
 
+export interface GroupTotal { ids: string[]; baseMinor: number; complete: boolean }
+
+/**
+ * Суммы групп раздела: группа = счета между разделителями (или до начала/конца списка).
+ * `items`: id счетов и разделителей в порядке показа. Пустые группы пропускаются; счета без строки среза не считаются.
+ */
+export function groupTotalsByDividers(items: string[], rows: SnapshotRow[], baseCurrency: string): GroupTotal[] {
+  const byId = new Map(rows.map((r) => [r.accountId, r]))
+  const out: GroupTotal[] = []
+  let cur: string[] = []
+  const flush = () => {
+    const rs = cur.map((id) => byId.get(id)).filter((r): r is SnapshotRow => !!r)
+    if (rs.length) { const t = summarize(rs, baseCurrency); out.push({ ids: cur.filter((id) => byId.has(id)), baseMinor: t.baseMinor, complete: t.complete }) }
+    cur = []
+  }
+  for (const id of items) { if (id.startsWith('div:')) flush(); else cur.push(id) }
+  flush()
+  return out
+}
+
 export interface SectionTotal { projectId: string; baseMinor: number; complete: boolean; missingRateCurrencies: string[] }
 
 /** Итого по каждому разделу в базовой валюте. `complete = false`: у части счетов нет курса, сумму показывать нельзя. */

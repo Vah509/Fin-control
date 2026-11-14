@@ -24,7 +24,7 @@ describe('настройка Главной', () => {
   it('сохранение и чтение (свой порядок и разделители), запись в журнал, повтор ничего не пишет', async () => {
     const s = await setup()
     const next = { ...freshHome(), order: ['total', 'rates', 'accounts'] as never, hiddenAccounts: [ID.mono], showTotal: false,
-      showSectionTotals: false, projectOrder: [ID.biznes], layout: { [ID.lichnoe]: [ID.cashUah, 'div:1', ID.space] } }
+      showSectionTotals: false, showGroupTotals: false, projectOrder: [ID.biznes], layout: { [ID.lichnoe]: [ID.cashUah, 'div:1', ID.space] } }
     await saveHomeSettings(s.ctx, next)
     expect(readHomeSettings(await s.storage.list('appSettings'))).toEqual(next)
     const count = async () => (await s.storage.listAudit({})).filter((a) => a.recordId === 'home_layout').length

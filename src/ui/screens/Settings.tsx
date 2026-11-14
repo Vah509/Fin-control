@@ -10,6 +10,7 @@ export function SettingsScreen() {
       <ul className="plain menu">
         <li><button className="menu-item" onClick={() => go('baseCurrency')}>Базовая валюта<span className="row-sub">сейчас установлено: {code}</span></button></li>
         <li><button className="menu-item" onClick={() => go('homeSettings')}>Настройки главного экрана</button></li>
+        <li><button className="menu-item" onClick={() => go('accountsSettings')}>Настройки страницы «Счета»</button></li>
       </ul>
     </Screen>
   )

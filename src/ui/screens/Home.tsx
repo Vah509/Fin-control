@@ -1,4 +1,5 @@
-import { getCheckpointDiffs, getDisplayRates, getSnapshot, isDivider, orderProjects, projectItems, sectionTotals, visibleItems, type HomeBlock } from '../../core'
+import { Fragment } from 'react'
+import { getCheckpointDiffs, getDisplayRates, getSnapshot, groupTotalsByDividers, isDivider, orderProjects, projectItems, sectionTotals, visibleItems, type HomeBlock } from '../../core'
 import { useApp } from '../app'
 import { useLoad } from '../hooks'
 import { dateRu, todayLocal } from '../format'
@@ -46,6 +47,10 @@ export function Home() {
             const items = projectItems(h.layout, p.id, accs)
             const list = h.showDividers ? visibleItems(items) : items.filter((id) => !isDivider(id))
             const t = totals.get(p.id)
+            // Суммы групп: только если есть разделители и групп больше одной; сумма стоит в строке над группой.
+            const groups = h.showGroupTotals && h.showDividers ? groupTotalsByDividers(list, d.snap.rows, base) : []
+            const headOf = new Map(groups.map((g) => [g.ids[0]!, g]))
+            const withHeads = groups.length > 1
             return (
               <div key={p.id} className="group">
                 <div className="group-head">
@@ -55,11 +60,18 @@ export function Home() {
                   )}
                 </div>
                 <ul className="plain rows">
-                  {list.map((id) => {
-                    if (isDivider(id)) return <li key={id} className="divider" aria-hidden="true" />
+                  {list.map((id, i) => {
+                    if (isDivider(id)) return withHeads ? null : <li key={id} className="divider" aria-hidden="true" />
                     const a = accs.find((x) => x.id === id)!
                     const row = rowOf(a.id)
-                    return row ? <AccountRow key={id} row={row} baseCurrency={base} onClick={() => go('account', { accountId: id })} /> : null
+                    if (!row) return null
+                    const g = withHeads ? headOf.get(id) : undefined
+                    return (
+                      <Fragment key={id}>
+                        {g && <li className={i === 0 ? 'subhead first' : 'subhead'} aria-hidden="true"><span className={g.complete ? '' : 'warn-text'}>{g.complete ? fmt(g.baseMinor, base) : 'нет курса'}</span></li>}
+                        <AccountRow row={row} baseCurrency={base} onClick={() => go('account', { accountId: id })} />
+                      </Fragment>
+                    )
                   })}
                 </ul>
               </div>

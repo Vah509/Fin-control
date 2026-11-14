@@ -21,6 +21,8 @@ export interface HomeSettings {
   hiddenAccounts: string[]
   /** Блок «Счета»: сумма раздела справа от его названия. */
   showSectionTotals: boolean
+  /** Блок «Счета»: сумма группы (счета между разделителями) в строке разделителя. */
+  showGroupTotals: boolean
   /** Блок «Счета»: разделители между счетами. */
   showDividers: boolean
   /** Блок «Счета»: свой порядок разделов (id); не названные идут после, в порядке экрана «Счета». */
@@ -31,7 +33,7 @@ export interface HomeSettings {
 
 export const DEFAULT_HOME: HomeSettings = {
   order: [...HOME_BLOCKS], showRates: true, showAccounts: true, showTotal: true,
-  hiddenAccounts: [], showSectionTotals: true, showDividers: true, projectOrder: [], layout: {},
+  hiddenAccounts: [], showSectionTotals: true, showGroupTotals: true, showDividers: true, projectOrder: [], layout: {},
 }
 
 export const freshHome = (): HomeSettings => ({ ...DEFAULT_HOME, order: [...DEFAULT_HOME.order], hiddenAccounts: [], projectOrder: [], layout: {} })
@@ -67,6 +69,7 @@ export function readHomeSettings(rows: AppSetting[]): HomeSettings {
     showRates: flag('showRates', true), showAccounts: flag('showAccounts', true), showTotal: flag('showTotal', true),
     hiddenAccounts: strings(o['hiddenAccounts']),
     showSectionTotals: flag('showSectionTotals', flag('showSections', true)),
+    showGroupTotals: flag('showGroupTotals', true),
     showDividers: flag('showDividers', true),
     projectOrder: strings(o['projectOrder']),
     layout: cleanLayout(o['layout']),

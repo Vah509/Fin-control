@@ -126,6 +126,8 @@ input:not([type=checkbox]):not([type=radio]), select {
 
 /* разделитель между счетами */
 .rows li.divider { display: block; height: 28px; padding: 0 !important; background: var(--bg); border-bottom: 1px solid var(--line); }
+.rows li.subhead { display: flex; justify-content: flex-end; align-items: center; height: 28px; padding: 0 12px !important; background: var(--bg); border-bottom: 1px solid var(--line); font-size: .85rem; font-weight: 600; color: var(--muted); }
+.rows li.subhead.first { border-top: 1px solid var(--line); }
 .rows li.divider-row { background: var(--bg); }
 
 .group-total { margin-top: 16px; font-weight: 600; white-space: nowrap; }
