@@ -85,6 +85,9 @@ export function Home() {
 
   return (
     <Screen title={`Сегодня, ${dateRu(today)}`}>
+      <p className="muted" style={{ fontSize: '0.75rem', margin: '0 0 0.5rem' }}>
+        Версия {__APP_VERSION__} · сборка {new Date(__BUILD_TIME__).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+      </p>
       {fx && (
         <Notice kind={fx.kind}>{fx.text}{fx.kind === 'warn' && <>{' '}<button className="link" onClick={() => void refreshFx()}>Повторить</button></>}</Notice>
       )}

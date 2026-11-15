@@ -47,7 +47,7 @@
 ## 5. Формат ответа чата (набросок v1, фиксируется на этапе А)
 ```
 { "format": "fin-control-import", "version": 1, "task_id": "...", "prepared_at": "ISO",
-  "part": 1, "parts": 1,
+  "part": 1, "parts": 1, "ai_name": "название ИИ и модель",
   "sources": [ { "name": "файл", "sha256": "..." } ],
   "statements": [ {
     "account": { "key": "ключ или null", "match": "exact | candidate | none",
