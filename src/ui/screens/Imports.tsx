@@ -41,26 +41,24 @@ interface Pick { text: string; when: string }
 export function ImportNewScreen() {
   const { ctx, ref, go, bump } = useApp()
   const accounts = useLoad(() => listImportableAccounts(ctx), [])
-  const [picked, setPicked] = useState<Record<string, Pick>>({})
+  const [step, setStep] = useState<1 | 2>(1)
+  const [chosen, setChosen] = useState<string[]>([])
+  const [values, setValues] = useState<Record<string, Pick>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const decimalsOf = (cur: string) => ref.cur.get(cur)?.decimals ?? 2
 
   const list = accounts.data ?? []
-  const items = list.filter((a) => picked[a.id]).map((a) => {
-    const p = picked[a.id]!
-    return { a, parsed: parseAmountInput(p.text, decimalsOf(a.currencyKey)), iso: localInputToIso(p.when) }
+  const selected = list.filter((a) => chosen.includes(a.id))
+  const valueOf = (id: string): Pick => values[id] ?? { text: '', when: toLocalInput() }
+  const items = selected.map((a) => {
+    const v = valueOf(a.id)
+    return { a, parsed: parseAmountInput(v.text, decimalsOf(a.currencyKey)), iso: localInputToIso(v.when) }
   })
   const ready = items.length > 0 && items.every((x) => x.parsed && 'minor' in x.parsed && x.iso)
 
-  function toggle(id: string) {
-    setPicked((s) => {
-      const n = { ...s }
-      if (n[id]) delete n[id]; else n[id] = { text: '', when: toLocalInput() }
-      return n
-    })
-  }
-  const set = (id: string, patch: Partial<Pick>) => setPicked((s) => ({ ...s, [id]: { ...s[id]!, ...patch } }))
+  const toggle = (id: string) => setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]))
+  const set = (id: string, patch: Partial<Pick>) => setValues((s) => ({ ...s, [id]: { ...valueOf(id), ...patch } }))
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -75,39 +73,51 @@ export function ImportNewScreen() {
     } catch (err) { setError(errorText(err)) } finally { setBusy(false) }
   }
 
-  return (
-    <Screen title="Новое задание" back={<BackButton to="imports" label="Загрузка выписок" />}>
-      <p className="muted">Выберите счета, по которым есть выписка, и введите остаток, который сейчас показывает банк.</p>
-      {accounts.loading && <Loading />}
-      {accounts.error && <ErrorBox text={accounts.error} onRetry={accounts.reload} />}
-      {accounts.data && list.length === 0 && <Notice>Нет активных счетов в режиме «остатки и движения».</Notice>}
-      <form onSubmit={submit} className="form">
-        {list.map((a) => {
-          const p = picked[a.id]
-          const it = items.find((x) => x.a.id === a.id)
-          return (
-            <div key={a.id} className="card">
+  if (step === 1) {
+    return (
+      <Screen title="Новое задание" back={<BackButton to="imports" label="Загрузка выписок" />}>
+        <p className="muted">Шаг 1 из 2. Отметьте счета, по которым есть выписка.</p>
+        {accounts.loading && <Loading />}
+        {accounts.error && <ErrorBox text={accounts.error} onRetry={accounts.reload} />}
+        {accounts.data && list.length === 0 && <Notice>Нет активных счетов в режиме «остатки и движения».</Notice>}
+        <ul className="plain rows">
+          {list.map((a) => (
+            <li key={a.id} className="row">
               <label className="check">
-                <input type="checkbox" checked={!!p} onChange={() => toggle(a.id)} />
+                <input type="checkbox" checked={chosen.includes(a.id)} onChange={() => toggle(a.id)} />
                 <span>{a.name} <span className="muted">{a.currencyKey.toUpperCase()}</span></span>
               </label>
-              {p && (
-                <>
-                  <label>Остаток в банке ({a.currencyKey.toUpperCase()})
-                    <input inputMode="decimal" value={p.text} onChange={(e) => set(a.id, { text: e.target.value })} placeholder="0.00" />
-                  </label>
-                  {it?.parsed && 'error' in it.parsed && <p className="warn-text">{it.parsed.error}</p>}
-                  {it?.parsed && 'minor' in it.parsed && <p className="row-sub">{money(it.parsed.minor, decimalsOf(a.currencyKey))} {a.currencyKey.toUpperCase()}</p>}
-                  <label>На момент
-                    <input type="datetime-local" value={p.when} onChange={(e) => set(a.id, { when: e.target.value })} />
-                  </label>
-                </>
-              )}
+            </li>
+          ))}
+        </ul>
+        <button className="btn primary" disabled={selected.length === 0} onClick={() => setStep(2)}>
+          Шаг 2: ввод остатков{selected.length > 0 ? ` (${selected.length})` : ''}
+        </button>
+      </Screen>
+    )
+  }
+
+  return (
+    <Screen title="Остатки" back={<button className="btn" type="button" onClick={() => setStep(1)}>← К выбору счетов</button>}>
+      <p className="muted">Шаг 2 из 2. Остаток, который сейчас показывает банк, и момент, на который он указан.</p>
+      <form onSubmit={submit} className="form">
+        {items.map(({ a, parsed }) => {
+          const v = valueOf(a.id)
+          return (
+            <div key={a.id} className="card">
+              <b>{a.name}</b>
+              <label>Остаток ({a.currencyKey.toUpperCase()})
+                <input inputMode="decimal" value={v.text} onChange={(e) => set(a.id, { text: e.target.value })} placeholder="0.00" />
+              </label>
+              {parsed && 'error' in parsed && <p className="warn-text">{parsed.error}</p>}
+              <label>На момент
+                <input type="datetime-local" value={v.when} onChange={(e) => set(a.id, { when: e.target.value })} />
+              </label>
             </div>
           )
         })}
         {error && <div className="box error" role="alert">{error}</div>}
-        <button className="btn primary" disabled={busy || !ready || !ctx.actor.isOwner}>{busy ? 'Готовим…' : 'Создать задание и пакет'}</button>
+        <button className="btn primary" disabled={busy || !ready || !ctx.actor.isOwner}>{busy ? 'Формируем…' : 'Сформировать файл'}</button>
       </form>
     </Screen>
   )
