@@ -79,13 +79,18 @@ export const SPECS: { [K in EntityName]: Spec } = {
     f('quoteCurrencyKey', 'quote_currency_key'), f('rate', 'rate', 'rate'), f('source', 'source'),
   ] },
   fxSourcePriorities: { table: 'fx_source_priority', pk: 'source', fields: [f('source', 'source'), f('priority', 'priority', 'int')] },
+  importJobs: { table: 'import_jobs', pk: 'id', fields: [
+    f('id', 'id'), f('status', 'status'), f('accounts', 'accounts', 'json'), f('packageText', 'package_text'),
+    f('contractVersion', 'contract_version', 'int'), f('createdBy', 'created_by'),
+    f('createdAt', 'created_at', 'ts'), f('updatedAt', 'updated_at', 'ts'),
+  ] },
 }
 
 /** Порядок записи в пакете: родители раньше детей (тот же порядок в SQL-функции apply_batch). */
 export const WRITE_ORDER: EntityName[] = [
   'appSettings', 'planTypes', 'countries', 'currencies', 'institutions', 'projects', 'accounts', 'accountIdentifiers',
   'tagGroups', 'tags', 'counterparties', 'counterpartyIdentifiers', 'transactions', 'checkpoints', 'periodLocks',
-  'fxRates', 'fxSourcePriorities',
+  'fxRates', 'fxSourcePriorities', 'importJobs',
 ]
 
 /** Откуда брать число знаков валюты. Заполняется слоем хранения. */

@@ -33,7 +33,7 @@ export async function loadRef(ctx: CoreContext): Promise<RefData> {
   }
 }
 
-export type Page = 'home' | 'snapshot' | 'moves' | 'accounts' | 'more' | 'balance' | 'periods' | 'dump' | 'settings' | 'baseCurrency' | 'homeSettings' | 'accountsSettings' | 'account' | 'newAccount'
+export type Page = 'home' | 'snapshot' | 'moves' | 'accounts' | 'more' | 'balance' | 'periods' | 'dump' | 'settings' | 'baseCurrency' | 'homeSettings' | 'accountsSettings' | 'account' | 'newAccount' | 'imports' | 'importNew' | 'importJob'
 export interface NavOptions { accountId?: string }
 
 export interface AppApi {

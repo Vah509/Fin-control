@@ -11,7 +11,7 @@ const ENTITY_LABELS: Record<string, string> = {
   institutions: 'учреждения', projects: 'проекты', accounts: 'счета', accountIdentifiers: 'признаки счетов',
   tagGroups: 'группы тегов', tags: 'теги', counterparties: 'контрагенты', counterpartyIdentifiers: 'признаки контрагентов',
   transactions: 'операции', checkpoints: 'контрольные точки', periodLocks: 'закрытия периодов', fxRates: 'курсы',
-  fxSourcePriorities: 'приоритеты курсов',
+  fxSourcePriorities: 'приоритеты курсов', importJobs: 'задания на импорт',
 }
 
 function download(name: string, text: string) {

@@ -24,6 +24,7 @@ const ERR: Record<ErrorCode, string> = {
   IDENTIFIER_INVALID_RANGE: 'Некорректный срок действия признака',
   CRYPTO_UNAVAILABLE: 'Шифрование недоступно',
   NO_RATE: 'Нет курса на эту дату',
+  INVALID_STATE: 'В этом статусе действие недоступно',
 }
 
 export function errorText(e: unknown): string {

@@ -71,4 +71,12 @@ describe('слой Supabase: преобразование колонок', () =>
     expect(Object.keys(SPECS).sort()).toEqual([...ENTITY_NAMES].sort())
     expect([...WRITE_ORDER].sort()).toEqual([...ENTITY_NAMES].sort())
   })
+  it('задание на импорт: преобразование строки и обратно', () => {
+    const job = { id: 'j', status: 'waiting_file' as const, accounts: [{ accountId: 'acc', balanceMinor: 70126, asOf: '2026-11-15T10:00:00.000Z' }],
+      packageText: '# x', contractVersion: 1, createdBy: null, createdAt: '2026-11-15T10:00:00.000Z', updatedAt: '2026-11-15T10:00:00.000Z' }
+    const r = toRow('importJobs', job, env)
+    expect(r['package_text']).toBe('# x')
+    expect(r['contract_version']).toBe(1)
+    expect(fromRow('importJobs', r, env)).toEqual(job)
+  })
 })

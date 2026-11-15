@@ -94,6 +94,16 @@ export interface AuditEntry {
 }
 export type NewAuditEntry = Omit<AuditEntry, 'id'>
 
+export type ImportJobStatus = 'preparing' | 'waiting_file' | 'review' | 'loaded' | 'cancelled'
+/** Счёт в задании на импорт: остаток, введённый владельцем по данным банка на момент asOf. */
+export interface ImportJobAccount { accountId: string; balanceMinor: number; asOf: string }
+export interface ImportJob {
+  id: string; status: ImportJobStatus
+  accounts: ImportJobAccount[]
+  packageText: string; contractVersion: number
+  createdBy: string | null; createdAt: string; updatedAt: string
+}
+
 /** Сущности, которые хранилище читает и пишет целиком (без правил). */
 export interface EntityMap {
   appSettings: AppSetting
@@ -113,6 +123,7 @@ export interface EntityMap {
   periodLocks: PeriodLock
   fxRates: FxRate
   fxSourcePriorities: FxSourcePriority
+  importJobs: ImportJob
 }
 export type EntityName = keyof EntityMap
 
@@ -122,6 +133,6 @@ export const PRIMARY_KEY: { [K in EntityName]: keyof EntityMap[K] & string } = {
   institutions: 'id', projects: 'id', accounts: 'id', accountIdentifiers: 'id',
   tagGroups: 'id', tags: 'id', counterparties: 'id', counterpartyIdentifiers: 'id',
   transactions: 'id', checkpoints: 'id', periodLocks: 'id', fxRates: 'id',
-  fxSourcePriorities: 'source',
+  fxSourcePriorities: 'source', importJobs: 'id',
 }
 export const ENTITY_NAMES = Object.keys(PRIMARY_KEY) as EntityName[]

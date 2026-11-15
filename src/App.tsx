@@ -21,6 +21,7 @@ import { BaseCurrencyScreen } from './ui/screens/BaseCurrency'
 import { HomeSettingsScreen } from './ui/screens/HomeSettings'
 import { AccountScreen } from './ui/screens/Account'
 import { NewAccountScreen } from './ui/screens/NewAccount'
+import { ImportsScreen, ImportNewScreen, ImportJobScreen } from './ui/screens/Imports'
 import { ErrorBox, Loading } from './ui/parts'
 import { canGoBack, readNavState } from './ui/navHistory'
 import type { Session, SupabaseClient } from '@supabase/supabase-js'
@@ -34,7 +35,7 @@ const TABS: { page: Page; label: string; icon: string }[] = [
 ]
 const TAB_OF: Record<Page, Page> = {
   home: 'home', balance: 'home', snapshot: 'snapshot', moves: 'moves', accounts: 'accounts',
-  more: 'more', periods: 'more', dump: 'more', settings: 'more', baseCurrency: 'more', homeSettings: 'more', accountsSettings: 'more', account: 'accounts', newAccount: 'accounts',
+  more: 'more', periods: 'more', dump: 'more', settings: 'more', baseCurrency: 'more', homeSettings: 'more', accountsSettings: 'more', account: 'accounts', newAccount: 'accounts', imports: 'more', importNew: 'more', importJob: 'more',
 }
 
 /** Ярлыки PWA: /?go=snapshot и /?go=balance. */
@@ -160,6 +161,9 @@ export function Shell({ db, ctx, initialRef, email }: { db: SupabaseClient; ctx:
           {page === 'accountsSettings' && <AccountsSettingsScreen />}
           {page === 'account' && accountId && <AccountScreen accountId={accountId} />}
           {page === 'newAccount' && <NewAccountScreen />}
+          {page === 'imports' && <ImportsScreen />}
+          {page === 'importNew' && <ImportNewScreen />}
+          {page === 'importJob' && accountId && <ImportJobScreen jobId={accountId} />}
         </main>
         <nav className="tabs" aria-label="Разделы">
           {TABS.map((t) => (

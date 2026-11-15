@@ -14,6 +14,7 @@ export function MoreScreen() {
       <ul className="plain menu">
         <li><button className="menu-item" onClick={() => go('settings')}>Настройки</button></li>
         <li><button className="menu-item" onClick={() => go('periods')}>Закрытие периодов{lockText && <span className="row-sub">{lockText}</span>}</button></li>
+        <li><button className="menu-item" onClick={() => go('imports')}>Загрузка выписок</button></li>
         <li><button className="menu-item" onClick={() => go('dump')}>Выгрузка и загрузка JSON</button></li>
       </ul>
       <div className="card">

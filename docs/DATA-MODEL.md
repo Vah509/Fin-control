@@ -21,14 +21,15 @@
 | `balance_checkpoints` | checkpoints | 1 | не участвуют в расчёте, только сверка |
 | `period_locks` | periodLocks | 1, 4в | одно общее закрытие; `project_id` пуст у новых записей |
 | `fx_rates`, `fx_source_priority` | fxRates, fxSourcePriorities | 1 | курсы `numeric(18,8)`, приоритет источников |
+| `import_jobs` | importJobs | 5 (15.11.2026) | задания на импорт: `status` (preparing, waiting_file, review, loaded, cancelled), `accounts` jsonb (счета с введённым остатком и моментом), `package_text` (пакет для чата), `contract_version`; RLS только владелец; без логики |
 | `audit_log` | журнал | 1, 4в | только дописывается; пишет только ядро (триггеры журнала удалены в 7б) |
 
-Нет совсем: `imports`, `import_rows`, `period_summaries`, внешние ключи `import_id` и `transfer_id` (нужны в шаге 5).
+Нет совсем (ждут пункт 6 `docs/CURRENT-TASK.md`): `imports`, `import_rows`, `period_summaries`, внешние ключи `import_id` и `transfer_id` (нужны в шаге 5).
 
 ## Функции и триггеры в базе
 
 Миграция `20261107100100_iteration2_storage_only.sql` (7б) убирает бизнес-логику итерации 1 из базы. **После всей цепочки на чистой базе остаются:**
-- функции: `public.apply_batch(jsonb)` (запись пакета, security invoker), `public.keep_alive()`; `app_private`: `account_role`, `can_read`, `can_write`, `handle_new_user`, `is_account_owner`, `is_any_owner`, `is_project_owner`, `touch_updated_at`;
+- функции: `public.apply_batch(jsonb)` (запись пакета, security invoker; с миграции 5 знает и `import_jobs`), `public.keep_alive()`; `app_private`: `account_role`, `can_read`, `can_write`, `handle_new_user`, `is_account_owner`, `is_any_owner`, `is_project_owner`, `touch_updated_at`;
 - триггеры: `z_touch` (обновление `updated_at`, 8 штук) и `on_auth_user_created`.
 Правила, блокировка закрытого периода и журнал только в ядре (`src/core/`).
 Живая тестовая база (проверено 13.11.2026) соответствует: в `public` только `apply_batch` и `keep_alive`. Мёртвые функции `app_private.assert_unlocked` и `locked_through_all` удалены миграцией `20261113110000_drop_dead_lock_functions.sql` (применена 13.11.2026).
