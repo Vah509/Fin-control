@@ -36,6 +36,9 @@ export async function addImportResponse(ctx: CoreContext, jobId: string, text: s
   }
   await saveJob(ctx, { ...j, status: 'review', review: { ...rv, responses: [...rv.responses, ...fresh] } },
     auditEntry(ctx, 'import_response_added', { tableName: 'import_jobs', recordId: j.id, details: { files: fresh.length } }))
+  const back = (await ctx.storage.list('importJobs')).find((x) => x.id === j.id)
+  if (readReview(back ?? j).responses.length < rv.responses.length + fresh.length)
+    fail('IMPORT_INVALID', 'ответ не сохранился в базе: вероятно, не применена миграция 20261115200000_iteration6_import_review.sql (колонка import_jobs.review)')
   return fresh.length
 }
 
