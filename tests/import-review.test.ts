@@ -60,6 +60,8 @@ describe('разбор и загрузка', () => {
     expect(rv.canLoad).toBe(false)
     expect(rv.statements[0]!.accountState).toBe('needs_decision')
     expect(rv.statements[0]!.proposedAccountId).toBe(ID.mono)
+    expect(rv.statements[0]!.rowsInFile).toBe(3)
+    expect(rv.missingCards).toEqual([])
     expect(await code(loadImport(ctx, job.id))).toBe('IMPORT_BLOCKED')
     await confirm(ctx, job.id, (d) => { d.accounts['1111'] = { accountId: ID.mono } })
     rv = await analyzeImport(ctx, job.id)

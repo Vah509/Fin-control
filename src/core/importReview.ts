@@ -33,7 +33,7 @@ export interface ReviewStatement {
   accountState: 'identified' | 'confirmed' | 'needs_decision' | 'skipped'
   bindMask: boolean                    // при загрузке привязать маску к счёту
   currencyKey: string | null; decimals: number
-  periodStart: string | null; periodEnd: string | null
+  periodStart: string | null; periodEnd: string | null; rowsInFile: number
   openingMinor: number | null; closingMinor: number | null
   incomeMinor: number; expenseMinor: number
   rows: ReviewRow[]
@@ -134,7 +134,7 @@ export async function analyzeImport(ctx: CoreContext, jobId: string): Promise<Im
     return {
       key, mask: st.mask, aiAccountKey: st.accountKey, accountId, proposedAccountId: identified ?? byKey?.id ?? null, accountState: state,
       bindMask: state === 'confirmed' && !!st.mask && st.mask !== (identified ? st.mask : ''), currencyKey: acc?.currencyKey ?? null, decimals,
-      periodStart: st.periodStart, periodEnd: st.periodEnd, openingMinor: null, closingMinor: null, incomeMinor: 0, expenseMinor: 0,
+      periodStart: st.periodStart, periodEnd: st.periodEnd, rowsInFile: st.rows.length, openingMinor: null, closingMinor: null, incomeMinor: 0, expenseMinor: 0,
       rows: [], errors: [], warnings: [], openingDiffMinor: null, openingFix: null, isFirstImport: false, entryDiffMinor: null, entryFix: null, entryAtUtc: null,
     }
   })
@@ -279,7 +279,7 @@ export async function analyzeImport(ctx: CoreContext, jobId: string): Promise<Im
     if (!base.identifierSuggestions.some((x) => x.id === id)) base.identifierSuggestions.push({ id, counterpartyId: cp.id, counterpartyName: cp.name, value: ni.value, decision: dec.identifiers[id] ?? null })
   }
   base.statements = stm
-  const present = new Set(stm.map((x) => x.accountId))
+  const present = new Set(stm.flatMap((x) => [x.accountId, x.proposedAccountId]))
   base.missingCards = job.accounts.filter((a) => !present.has(a.accountId)).map((a) => ({ accountId: a.accountId, name: accById.get(a.accountId)?.name ?? a.accountId }))
 
   const b = base.blockers

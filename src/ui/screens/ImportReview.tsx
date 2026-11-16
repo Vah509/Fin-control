@@ -77,11 +77,11 @@ export function ReviewPanel({ job, onChanged }: { job: ImportJob; onChanged: () 
       {r.statements.map((s) => (
         <div key={s.key} className="card">
           <b>Карта {s.mask ?? s.key}</b>
-          <span className="row-sub"> {s.periodStart ?? '?'} — {s.periodEnd ?? '?'}, строк {s.rows.length}</span>
+          <span className="row-sub"> {s.periodStart ?? '?'} — {s.periodEnd ?? '?'}, строк в файле {s.rowsInFile}</span>
           {s.accountState === 'skipped' && <p className="muted">Пропущена. <button className="btn" onClick={() => change((d) => { delete d.accounts[s.key] })}>Вернуть</button></p>}
           {s.accountState === 'needs_decision' && (
             <div className="form">
-              <p className="warn-text">Счёт не опознан. Чат предложил: {s.aiAccountKey ?? '—'}.</p>
+              <p className="muted">Выберите счёт для этой карты. Чат предложил: {s.aiAccountKey ?? '—'}.</p>
               <select defaultValue={s.proposedAccountId ?? ''} id={`acc-${s.key}`}>
                 <option value="">— выберите счёт —</option>
                 {choices.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.currencyKey.toUpperCase()})</option>)}
