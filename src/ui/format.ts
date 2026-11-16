@@ -25,6 +25,9 @@ const ERR: Record<ErrorCode, string> = {
   CRYPTO_UNAVAILABLE: 'Шифрование недоступно',
   NO_RATE: 'Нет курса на эту дату',
   INVALID_STATE: 'В этом статусе действие недоступно',
+  IMPORT_INVALID: 'Ответ чата не принят',
+  IMPORT_DUPLICATE: 'Этот ответ уже загружен',
+  IMPORT_BLOCKED: 'Загрузка заблокирована: есть нерешённые вопросы или ошибки',
 }
 
 export function errorText(e: unknown): string {

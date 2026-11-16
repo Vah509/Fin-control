@@ -97,10 +97,33 @@ export type NewAuditEntry = Omit<AuditEntry, 'id'>
 export type ImportJobStatus = 'preparing' | 'waiting_file' | 'review' | 'loaded' | 'cancelled'
 /** Счёт в задании на импорт: остаток, введённый владельцем по данным банка на момент asOf. */
 export interface ImportJobAccount { accountId: string; balanceMinor: number; asOf: string }
+/** Ответ ИИ-чата, принятый в задание (один JSON; после загрузки в базу doc очищается, остаётся хэш). */
+export interface ImportStoredResponse { id: string; receivedAt: string; doc: Json | null }
+/** Решения владельца при разборе. Ключи: statement = маска карты (или ключ счёта), группа контрагентов = нормализованное название. */
+export type ImportAccountDecision = { accountId: string } | 'skip'
+export type ImportCpDecision = { mode: 'new' } | { mode: 'existing'; counterpartyId: string } | { mode: 'queue' }
+export interface ImportDecisions {
+  primary: string | null
+  accounts: Record<string, ImportAccountDecision>
+  openingFix: Record<string, 'adjust' | 'keep'>
+  entryFix: Record<string, 'adjust' | 'keep'>
+  counterparties: Record<string, ImportCpDecision>
+  /** Подтверждённые «свои счета»: маска другой карты -> принято (true) или отклонено (false). */
+  ownAccounts: Record<string, boolean>
+  identifiers: Record<string, 'add' | 'reject'>
+}
+export interface ImportResult {
+  loadedAt: string; transactions: number; adjustments: number; checkpointIds: string[]
+  newCounterparties: number; skippedDuplicates: number; notes: string[]
+  rolledBackAt: string | null
+}
+export interface ImportReviewState { responses: ImportStoredResponse[]; decisions: ImportDecisions; result: ImportResult | null }
 export interface ImportJob {
   id: string; status: ImportJobStatus
   accounts: ImportJobAccount[]
   packageText: string; contractVersion: number
+  /** Принятые ответы чата, решения, итог загрузки. Пустой объект у старых заданий. */
+  review: Partial<ImportReviewState>
   createdBy: string | null; createdAt: string; updatedAt: string
 }
 

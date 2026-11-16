@@ -4,6 +4,7 @@ import type { ImportJob, ImportJobStatus } from '../../data/types'
 import { useApp } from '../app'
 import { useLoad } from '../hooks'
 import { dateTimeRu, errorText, localInputToIso, money, parseAmountInput, toLocalInput } from '../format'
+import { LoadedPanel, ResponseLoader, ReviewPanel } from './ImportReview'
 import { BackButton, ErrorBox, Loading, Notice, Screen } from '../parts'
 
 const STATUS: Record<ImportJobStatus, string> = {
@@ -198,6 +199,9 @@ function JobView({ job, refData, onChanged }: { job: ImportJob; refData: ReturnT
         </div>
         <details><summary>Показать текст пакета</summary><pre className="pre">{job.packageText}</pre></details>
       </div>
+      {open && <ResponseLoader job={job} onChanged={onChanged} />}
+      {job.status === 'review' && <ReviewPanel job={job} onChanged={onChanged} />}
+      {(job.status === 'loaded' || (job.status === 'cancelled' && job.review.result)) && <LoadedPanel job={job} onChanged={onChanged} />}
       {open && <button className="btn" disabled={busy || !ctx.actor.isOwner} onClick={cancel}>Отменить задание</button>}
       {msg && <div className={`box ${msg.kind}`} role={msg.kind === 'error' ? 'alert' : 'status'}>{msg.text}</div>}
     </>

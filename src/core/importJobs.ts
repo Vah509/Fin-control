@@ -64,7 +64,7 @@ export async function createImportJob(ctx: CoreContext, input: NewImportJobInput
   const nowIso = ctx.now().toISOString()
   const packageText = await buildImportPackage(ctx, { taskId: id, accounts: chosen })
   const job: ImportJob = {
-    id, status: 'waiting_file', accounts: chosen, packageText, contractVersion: IMPORT_CONTRACT_VERSION,
+    id, status: 'waiting_file', accounts: chosen, packageText, contractVersion: IMPORT_CONTRACT_VERSION, review: {},
     createdBy: ctx.actor.userId, createdAt: nowIso, updatedAt: nowIso,
   }
   await ctx.storage.applyBatch({

@@ -81,7 +81,7 @@ export const SPECS: { [K in EntityName]: Spec } = {
   fxSourcePriorities: { table: 'fx_source_priority', pk: 'source', fields: [f('source', 'source'), f('priority', 'priority', 'int')] },
   importJobs: { table: 'import_jobs', pk: 'id', fields: [
     f('id', 'id'), f('status', 'status'), f('accounts', 'accounts', 'json'), f('packageText', 'package_text'),
-    f('contractVersion', 'contract_version', 'int'), f('createdBy', 'created_by'),
+    f('contractVersion', 'contract_version', 'int'), f('review', 'review', 'json'), f('createdBy', 'created_by'),
     f('createdAt', 'created_at', 'ts'), f('updatedAt', 'updated_at', 'ts'),
   ] },
 }

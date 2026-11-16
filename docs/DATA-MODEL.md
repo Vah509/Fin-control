@@ -21,7 +21,7 @@
 | `balance_checkpoints` | checkpoints | 1 | не участвуют в расчёте, только сверка |
 | `period_locks` | periodLocks | 1, 4в | одно общее закрытие; `project_id` пуст у новых записей |
 | `fx_rates`, `fx_source_priority` | fxRates, fxSourcePriorities | 1 | курсы `numeric(18,8)`, приоритет источников |
-| `import_jobs` | importJobs | 5 (15.11.2026) | задания на импорт: `status` (preparing, waiting_file, review, loaded, cancelled), `accounts` jsonb (счета с введённым остатком и моментом), `package_text` (пакет для чата), `contract_version`; RLS только владелец; без логики |
+| `import_jobs` | importJobs | 5 (15.11.2026) | задания на импорт: `status` (preparing, waiting_file, review, loaded, cancelled), `accounts` jsonb (счета с введённым остатком и моментом), `package_text` (пакет для чата), `contract_version`, `review` jsonb (миграция 6, 16.11.2026: принятые ответы чата, решения, итог загрузки); RLS только владелец; без логики |
 | `audit_log` | журнал | 1, 4в | только дописывается; пишет только ядро (триггеры журнала удалены в 7б) |
 
 Нет совсем (ждут пункт 6 `docs/CURRENT-TASK.md`): `imports`, `import_rows`, `period_summaries`, внешние ключи `import_id` и `transfer_id` (нужны в шаге 5).
