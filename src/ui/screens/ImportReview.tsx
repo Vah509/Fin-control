@@ -14,29 +14,23 @@ type Msg = { kind: 'ok' | 'error'; text: string } | null
 
 export function ResponseLoader({ job, onChanged }: { job: ImportJob; onChanged: () => void }) {
   const { ctx } = useApp()
-  const [text, setText] = useState('')
+  const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<Msg>(null)
-  async function submit(t: string) {
+  async function submit() {
+    if (!file) return
     setBusy(true); setMsg(null)
-    try { const n = await addImportResponse(ctx, job.id, t); setText(''); setMsg({ kind: 'ok', text: `Принято файлов: ${n}` }); onChanged() }
+    try { await addImportResponse(ctx, job.id, await file.text()); setFile(null); onChanged() }
     catch (e) { setMsg({ kind: 'error', text: errorText(e) }) } finally { setBusy(false) }
-  }
-  async function paste() {
-    try { setText(await navigator.clipboard.readText()) } catch (e) { setMsg({ kind: 'error', text: errorText(e) }) }
   }
   return (
     <div className="card">
       <h2>Ответ чата</h2>
-      <p className="muted">Вставьте JSON из чата (можно несколько частей подряд) или выберите файл. Второй ответ другого чата служит для сверки.</p>
-      <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="Вставьте JSON" />
-      <div className="actions">
-        <button className="btn" onClick={paste}>Вставить из буфера</button>
-        <button className="btn primary" disabled={busy || !text.trim() || !ctx.actor.isOwner} onClick={() => submit(text)}>Принять</button>
-      </div>
-      <label className="btn">Выбрать файл
-        <input type="file" accept=".json,.txt,application/json,text/plain" hidden onChange={async (e) => { const f = e.target.files?.[0]; if (f) await submit(await f.text()); e.target.value = '' }} />
+      <p className="muted">Выберите файл JSON, который вернул чат, и нажмите «Загрузить».</p>
+      <label className="btn">{file ? file.name : 'Выбрать файл'}
+        <input type="file" accept=".json,.txt,application/json,text/plain" hidden onChange={(e) => { setFile(e.target.files?.[0] ?? null); setMsg(null); e.target.value = '' }} />
       </label>
+      <button className="btn primary" disabled={busy || !file || !ctx.actor.isOwner} onClick={submit}>{busy ? 'Разбираем…' : 'Загрузить'}</button>
       {msg && <div className={`box ${msg.kind}`} role={msg.kind === 'error' ? 'alert' : 'status'}>{msg.text}</div>}
     </div>
   )
@@ -74,15 +68,8 @@ export function ReviewPanel({ job, onChanged }: { job: ImportJob; onChanged: () 
   return (
     <>
       <div className="card facts">
-        <p><b>Разбор:</b> {r.aiName ?? 'ответ не готов'}</p>
-        {r.groups.map((g) => (
-          <p key={g.key} className="row-sub">{g.aiName}: {g.complete ? 'полный' : `части ${g.have.join(',')} из ${g.parts}`}{g.isPrimary ? ' (основной)' : ''}
-            {!g.isPrimary && g.complete && <button className="btn" disabled={busy} onClick={() => change((d) => { d.primary = g.key })}>Сделать основным</button>}
-          </p>
-        ))}
-        {r.crossDiffs && (r.crossDiffs.length === 0 ? <Notice kind="ok">Два ответа совпадают по строкам и остаткам.</Notice>
-          : <Notice>Ответы чатов различаются:<ul>{r.crossDiffs.map((x) => <li key={x}>{x}</li>)}</ul></Notice>)}
-        <button className="btn" disabled={busy} onClick={() => confirmReset()}>Сбросить ответы</button>
+        <p><b>Загружен ответ:</b> {r.aiName ?? 'не готов'}</p>
+        <button className="btn" disabled={busy} onClick={() => confirmReset()}>Загрузить другой файл</button>
       </div>
 
       <h2>Счета и расхождения</h2>
@@ -191,7 +178,7 @@ export function ReviewPanel({ job, onChanged }: { job: ImportJob; onChanged: () 
   )
 
   function confirmReset() {
-    if (window.confirm('Сбросить загруженные ответы и решения?')) act(async () => { await resetImportResponses(ctx, job.id); return 'Ответы сброшены.' })
+    if (window.confirm('Сбросить загруженный файл и решения?')) act(async () => { await resetImportResponses(ctx, job.id); return 'Ответы сброшены.' })
   }
 }
 
