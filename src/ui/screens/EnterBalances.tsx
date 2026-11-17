@@ -60,7 +60,7 @@ export function EnterBalancesScreen() {
   const accounts = ref.accounts.filter((a) => !a.archivedAt)
   const q = useLoad(() => lastEnteredBalances(ctx), [])
   return (
-    <Screen title="Ввод остатков" back={<BackButton to="settings" />}>
+    <Screen title="Ввод остатков" back={<BackButton to="more" />}>
       {q.loading && !q.data && <Loading />}
       {q.error && <ErrorBox text={q.error} onRetry={q.reload} />}
       {q.data && (
