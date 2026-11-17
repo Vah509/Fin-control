@@ -8,6 +8,7 @@ export function SettingsScreen() {
   return (
     <Screen title="Настройки" back={<BackButton to="more" />}>
       <ul className="plain menu">
+        <li><button className="menu-item" onClick={() => go('enterBalances')}>Ввод остатков<span className="row-sub">учёт остатками: дата и сумма по счёту</span></button></li>
         <li><button className="menu-item" onClick={() => go('baseCurrency')}>Базовая валюта<span className="row-sub">сейчас установлено: {code}</span></button></li>
         <li><button className="menu-item" onClick={() => go('homeSettings')}>Настройки главного экрана</button></li>
         <li><button className="menu-item" onClick={() => go('accountsSettings')}>Настройки страницы «Счета»</button></li>

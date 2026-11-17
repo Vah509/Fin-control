@@ -1,25 +1,33 @@
-import { Fragment } from 'react'
-import { getCheckpointDiffs, getDisplayRates, getSnapshot, groupTotalsByDividers, isDivider, orderProjects, projectItems, sectionTotals, visibleItems, type HomeBlock } from '../../core'
+import { Fragment, useState } from 'react'
+import { getCheckpointDiffs, getDisplayRates, getEnteredSnapshot, getSnapshot, groupTotalsByDividers, isDivider, orderProjects, projectItems, sectionTotals, visibleItems, type HomeBlock } from '../../core'
 import { useApp } from '../app'
 import { useLoad } from '../hooks'
 import { dateRu, todayLocal } from '../format'
-import { AccountRow, ErrorBox, Loading, Notice, RatesCard, Screen, TotalsCard, useCurrencyFormat } from '../parts'
+import { AccountRow, ErrorBox, NoDataRow, Loading, Notice, RatesCard, Screen, TotalsCard, useCurrencyFormat } from '../parts'
 
 export function Home() {
   const { ctx, ref, go, fx, refreshFx } = useApp()
   const { fmt } = useCurrencyFormat()
   const today = todayLocal()
+  const [mode, setMode] = useState<'moves' | 'balances'>('moves')
+  const byBalances = mode === 'balances'
   const h = ref.home
   // Скрытые с Главной счета не входят и в её итоги; архивные с остатком в итогах остаются (как в «Аналитике»).
   const included = ref.accounts.filter((a) => !h.hiddenAccounts.includes(a.id))
   const key = included.map((a) => a.id).join(',')
   const q = useLoad(async () => {
-    const snap = await getSnapshot(ctx, { date: today, accountIds: included.map((a) => a.id) })
+    const ids = included.map((a) => a.id)
+    if (mode === 'balances') {
+      const e = await getEnteredSnapshot(ctx, { rateDate: today, accountIds: ids })
+      const snap = { date: today, rows: e.rows, totals: e.totals }
+      return { snap, diffs: [], rates: await getDisplayRates(ctx, today), dates: e.dateByAccount, missing: new Set(e.missing) }
+    }
+    const snap = await getSnapshot(ctx, { date: today, accountIds: ids })
     const diffs = snap.rows.length
       ? (await getCheckpointDiffs(ctx, { accountIds: snap.rows.map((r) => r.accountId), throughDate: today })).filter((d) => d.diffMinor !== 0)
       : []
-    return { snap, diffs, rates: await getDisplayRates(ctx, today) }
-  }, [today, key])
+    return { snap, diffs, rates: await getDisplayRates(ctx, today), dates: {} as Record<string, string>, missing: new Set<string>() }
+  }, [today, key, mode])
 
   const shown = included.filter((a) => !a.archivedAt)
   const rowOf = (id: string) => q.data?.snap.rows.find((r) => r.accountId === id)
@@ -64,12 +72,12 @@ export function Home() {
                     if (isDivider(id)) return withHeads ? null : <li key={id} className="divider" aria-hidden="true" />
                     const a = accs.find((x) => x.id === id)!
                     const row = rowOf(a.id)
-                    if (!row) return null
+                    if (!row) return byBalances && d.missing.has(a.id) ? <NoDataRow key={id} account={a} onClick={() => go('account', { accountId: id })} /> : null
                     const g = withHeads ? headOf.get(id) : undefined
                     return (
                       <Fragment key={id}>
                         {g && <li className={i === 0 ? 'subhead first' : 'subhead'} aria-hidden="true"><span className={g.complete ? '' : 'warn-text'}>{g.complete ? fmt(g.baseMinor, base) : 'нет курса'}</span></li>}
-                        <AccountRow row={row} baseCurrency={base} onClick={() => go('account', { accountId: id })} />
+                        <AccountRow row={row} baseCurrency={base} sub={byBalances && d.dates[id] ? `остаток на ${dateRu(d.dates[id]!)}` : undefined} onClick={() => go('account', { accountId: id })} />
                       </Fragment>
                     )
                   })}
@@ -80,7 +88,7 @@ export function Home() {
         </div>
       )
     }
-    return h.showTotal && d.snap.rows.length > 0 ? <TotalsCard key={b} totals={d.snap.totals} /> : null
+    return h.showTotal && d.snap.rows.length > 0 ? <TotalsCard key={b} totals={d.snap.totals} hideUnaccounted={byBalances} /> : null
   }
 
   return (
@@ -91,6 +99,10 @@ export function Home() {
       {fx && (
         <Notice kind={fx.kind}>{fx.text}{fx.kind === 'warn' && <>{' '}<button className="link" onClick={() => void refreshFx()}>Повторить</button></>}</Notice>
       )}
+      <div className="seg" role="tablist" aria-label="Вид учёта" style={{ margin: '0 0 0.75rem' }}>
+        <button role="tab" aria-selected={!byBalances} className={`btn${byBalances ? '' : ' primary'}`} onClick={() => setMode('moves')}>Движения</button>
+        <button role="tab" aria-selected={byBalances} className={`btn${byBalances ? ' primary' : ''}`} onClick={() => setMode('balances')}>Остатки</button>
+      </div>
       {q.loading && <Loading />}
       {q.error && <ErrorBox text={q.error} onRetry={q.reload} />}
       {q.data && (

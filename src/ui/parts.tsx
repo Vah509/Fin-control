@@ -59,7 +59,7 @@ export function useCurrencyFormat() {
   return { code, dec, fmt }
 }
 
-export function TotalsCard({ totals, title = 'Итого' }: { totals: SnapshotTotals; title?: string }) {
+export function TotalsCard({ totals, title = 'Итого', hideUnaccounted = false }: { totals: SnapshotTotals; title?: string; hideUnaccounted?: boolean }) {
   const { fmt } = useCurrencyFormat()
   const { code } = useCurrencyFormat()
   return (
@@ -74,17 +74,17 @@ export function TotalsCard({ totals, title = 'Итого' }: { totals: SnapshotT
           <li key={t.currencyKey}><span>{code(t.currencyKey)}</span><b>{fmt(t.balanceMinor, t.currencyKey)}</b></li>
         ))}
       </ul>
-      <div className="unaccounted">
+      {!hideUnaccounted && <div className="unaccounted">
         <span>Неучтённое</span>
         <b className={totals.unaccountedBaseMinor === 0 ? '' : 'warn-text'}>
           {totals.unaccountedBaseMinor === 0 ? '0 · учёт полный' : fmt(totals.unaccountedBaseMinor, totals.baseCurrency)}
         </b>
-      </div>
+      </div>}
     </div>
   )
 }
 
-export function AccountRow({ row, baseCurrency, onClick }: { row: SnapshotRow; baseCurrency: string; onClick?: () => void }) {
+export function AccountRow({ row, baseCurrency, onClick, sub }: { row: SnapshotRow; baseCurrency: string; onClick?: () => void; sub?: string }) {
   const { fmt } = useCurrencyFormat()
   const { ref } = useApp()
   const account = ref.accounts.find((a) => a.id === row.accountId)
@@ -94,6 +94,7 @@ export function AccountRow({ row, baseCurrency, onClick }: { row: SnapshotRow; b
       {account && <AccountChip account={account} />}
       <div className="row-main grow">
         <span className="row-title">{row.name}</span>
+        {sub && <span className="row-sub">{sub}</span>}
         {row.unaccountedMinor !== 0 && <span className="row-sub warn-text">неучтённое: {fmt(row.unaccountedMinor, row.currencyKey)}</span>}
       </div>
       <div className="row-amount">
@@ -175,5 +176,16 @@ export function RatesCard({ rates }: { rates: DisplayRate[] }) {
         )
       })}
     </div>
+  )
+}
+
+/** Строка счёта без введённого остатка (вкладка «Остатки»). */
+export function NoDataRow({ account, onClick }: { account: Account; onClick?: () => void }) {
+  return (
+    <li className={`row${onClick ? ' tap' : ''}`} onClick={onClick}>
+      <AccountChip account={account} />
+      <div className="row-main grow"><span className="row-title">{account.name}</span></div>
+      <div className="row-amount"><span className="muted">нет данных</span></div>
+    </li>
   )
 }

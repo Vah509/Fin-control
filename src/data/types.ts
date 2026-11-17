@@ -67,7 +67,8 @@ export interface Transaction {
   createdBy: string | null; createdAt: string; updatedAt: string
 }
 
-export type CheckpointKind = 'balance' | 'portfolio_value'
+/** balance: точка формы ввода остатка (сверяется с расчётом по движениям); portfolio_value: оценка портфеля; entered: остаток, введённый на экране «Ввод остатков» (учёт остатками, с движениями не сверяется). */
+export type CheckpointKind = 'balance' | 'portfolio_value' | 'entered'
 export interface BalanceCheckpoint {
   id: string; accountId: string; asOf: string; balanceMinor: number
   kind: CheckpointKind; source: 'manual' | 'statement'; status: 'active' | 'invalid'

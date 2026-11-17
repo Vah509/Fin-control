@@ -5,6 +5,7 @@ import type { CoreContext } from './context'
 import { fail } from './errors'
 import { FxResolver } from './fx'
 import { convertMinor } from './money'
+import { lastEnteredBalances } from './balanceLedger'
 import { readSettings, resolveTimeZone } from './settings'
 import { assertDate, endOfLocalDayMs, iso, startOfLocalDayMs } from './time'
 
@@ -164,4 +165,45 @@ export function sectionTotals(s: Snapshot): Map<string, SectionTotal> {
     out.set(g.groupKey, { projectId: g.groupKey, baseMinor: g.totals.baseMinor, complete: g.totals.complete, missingRateCurrencies: g.totals.missingRateCurrencies })
   }
   return out
+}
+
+export interface EnteredSnapshot {
+  rows: SnapshotRow[]
+  /** Дата последнего введённого остатка по счёту (ГГГГ-ММ-ДД в поясе счёта). */
+  dateByAccount: Record<string, string>
+  /** Счета, по которым остаток ещё не вводился («нет данных»). */
+  missing: string[]
+  totals: SnapshotTotals
+}
+
+/**
+ * Учёт остатками: по каждому счёту берётся последний введённый остаток (точка kind = entered, действующая,
+ * самая поздняя по дате; при равных датах более поздняя запись). Пересчёт в базовую валюту по курсу на `rateDate`.
+ * Движения не участвуют. Счета без остатка попадают в `missing` и в итоги не входят.
+ */
+export async function getEnteredSnapshot(
+  ctx: CoreContext, input: { rateDate: string; accountIds?: string[]; baseCurrency?: string },
+): Promise<EnteredSnapshot> {
+  assertDate(input.rateDate)
+  const e = await env(ctx, input.baseCurrency, input.rateDate)
+  const chosen = e.accounts
+    .filter((a) => !input.accountIds || input.accountIds.includes(a.id))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
+  const last = await lastEnteredBalances(ctx, chosen.map((a) => a.id))
+  const rows: SnapshotRow[] = []
+  const missing: string[] = []
+  const dateByAccount: Record<string, string> = {}
+  for (const a of chosen) {
+    const cp = last.get(a.id)
+    if (!cp) { if (!a.archivedAt) missing.push(a.id); continue }
+    dateByAccount[a.id] = cp.date
+    rows.push({
+      accountId: a.id, key: a.key, name: a.name, type: a.type, projectId: a.projectId,
+      countryKey: a.countryKey, holder: a.holder, institutionId: a.institutionId, currencyKey: a.currencyKey,
+      balanceMinor: cp.balanceMinor, unaccountedMinor: 0,
+      balance: convert(e, cp.balanceMinor, a.currencyKey, input.rateDate),
+      unaccounted: { minor: 0, hasRate: true },
+    })
+  }
+  return { rows, dateByAccount, missing, totals: summarize(rows, e.base) }
 }
