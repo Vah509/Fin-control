@@ -1,13 +1,13 @@
 import { Fragment, useState } from 'react'
-import { getCheckpointDiffs, getDisplayRates, getEnteredSnapshot, getSnapshot, groupTotalsByDividers, isDivider, orderProjects, projectItems, sectionTotals, visibleItems, type HomeBlock } from '../../core'
+import { getCheckpointDiffs, getDisplayRates, getEnteredSnapshot, getSnapshot, groupTotalsByDividers, isDivider, orderProjects, projectItems, projectTotals, sectionTotals, totalItems, visibleItems, type HomeBlock } from '../../core'
 import { useApp } from '../app'
 import { useLoad } from '../hooks'
 import { dateRu, todayLocal } from '../format'
-import { AccountRow, ErrorBox, NoDataRow, Loading, Notice, RatesCard, Screen, TotalsCard, useCurrencyFormat } from '../parts'
+import { AccountRow, ErrorBox, NoDataRow, Loading, Notice, RatesCard, Screen, useCurrencyFormat } from '../parts'
 
 export function Home() {
   const { ctx, ref, go, fx, refreshFx } = useApp()
-  const { fmt } = useCurrencyFormat()
+  const { fmt, code } = useCurrencyFormat()
   const today = todayLocal()
   const [mode, setMode] = useState<'moves' | 'balances'>('moves')
   const byBalances = mode === 'balances'
@@ -88,7 +88,37 @@ export function Home() {
         </div>
       )
     }
-    return h.showTotal && d.snap.rows.length > 0 ? <TotalsCard key={b} totals={d.snap.totals} hideUnaccounted={byBalances} /> : null
+    if (!h.showTotal) return null
+    // Итог по разделам: только показанные счета (сумма равна сумме строк на экране), только выбранные разделы.
+    const shownIds = new Set(shown.map((a) => a.id))
+    const pt = projectTotals(totalItems(h, ref.projects), d.snap.rows.filter((r) => shownIds.has(r.accountId)), d.snap.totals.baseCurrency)
+    if (pt.groups.length === 0) return null
+    const base = pt.totals.baseCurrency
+    const pname = (id: string) => ref.projects.find((p) => p.id === id)?.name ?? id
+    const amount = (m: number, ok: boolean) => (ok ? fmt(m, base) : 'нет курса')
+    return (
+      <div key={b} className="card totals">
+        <ul className="plain rows">
+          {pt.groups.map((g, gi) => (
+            <Fragment key={gi}>
+              {pt.split && <li className={gi === 0 ? 'subhead first' : 'subhead'} aria-hidden="true"><span className={g.complete ? '' : 'warn-text'}>{amount(g.baseMinor, g.complete)}</span></li>}
+              {g.projects.map((p) => (
+                <li key={p.projectId} className="row">
+                  <div className="row-main grow"><span className="row-title">{pname(p.projectId)}</span></div>
+                  <div className="row-amount"><b className={p.complete ? '' : 'warn-text'}>{amount(p.baseMinor, p.complete)}</b></div>
+                </li>
+              ))}
+            </Fragment>
+          ))}
+        </ul>
+        <div className="label" style={{ marginTop: 12 }}>Итого в {code(base)}</div>
+        <div className="big">{fmt(pt.totals.baseMinor, base)}</div>
+        {!pt.totals.complete && <p className="warn-text">Нет курса: {pt.totals.missingRateCurrencies.map(code).join(', ')}. Итог неполный.</p>}
+        <ul className="plain">
+          {pt.totals.byCurrency.map((t) => <li key={t.currencyKey}><span>{code(t.currencyKey)}</span><b>{fmt(t.balanceMinor, t.currencyKey)}</b></li>)}
+        </ul>
+      </div>
+    )
   }
 
   return (

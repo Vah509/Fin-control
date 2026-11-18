@@ -5,7 +5,7 @@ import type { AppSetting, Json } from '../data/types'
 import { auditEntry } from './audit'
 import type { CoreContext } from './context'
 import { fail } from './errors'
-import type { Layout } from './layout'
+import { isDivider, type Layout } from './layout'
 
 export const HOME_KEY = 'home_layout'
 export const HOME_BLOCKS = ['rates', 'accounts', 'total'] as const
@@ -29,14 +29,18 @@ export interface HomeSettings {
   projectOrder: string[]
   /** Блок «Счета»: свой порядок счетов и разделителей по разделам { id раздела: [id счетов и разделителей] }. */
   layout: Layout
+  /** Блок «Общий итог»: id разделов, не входящих в итог (новые разделы входят сами). */
+  totalHidden: string[]
+  /** Блок «Общий итог»: порядок разделов и разделителей (id); не названные разделы идут после, в порядке Главной. */
+  totalLayout: string[]
 }
 
 export const DEFAULT_HOME: HomeSettings = {
   order: [...HOME_BLOCKS], showRates: true, showAccounts: true, showTotal: true,
-  hiddenAccounts: [], showSectionTotals: true, showGroupTotals: true, showDividers: true, projectOrder: [], layout: {},
+  hiddenAccounts: [], showSectionTotals: true, showGroupTotals: true, showDividers: true, projectOrder: [], layout: {}, totalHidden: [], totalLayout: [],
 }
 
-export const freshHome = (): HomeSettings => ({ ...DEFAULT_HOME, order: [...DEFAULT_HOME.order], hiddenAccounts: [], projectOrder: [], layout: {} })
+export const freshHome = (): HomeSettings => ({ ...DEFAULT_HOME, order: [...DEFAULT_HOME.order], hiddenAccounts: [], projectOrder: [], layout: {}, totalHidden: [], totalLayout: [] })
 
 const isBlock = (x: unknown): x is HomeBlock => (HOME_BLOCKS as readonly unknown[]).includes(x)
 const strings = (v: unknown): string[] => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string'))] : [])
@@ -73,6 +77,8 @@ export function readHomeSettings(rows: AppSetting[]): HomeSettings {
     showDividers: flag('showDividers', true),
     projectOrder: strings(o['projectOrder']),
     layout: cleanLayout(o['layout']),
+    totalHidden: strings(o['totalHidden']),
+    totalLayout: strings(o['totalLayout']),
   }
 }
 
@@ -91,6 +97,7 @@ export async function saveHomeSettings(ctx: CoreContext, next: HomeSettings): Pr
   const clean: HomeSettings = {
     ...next, order: normalizeOrder(next.order), hiddenAccounts: strings(next.hiddenAccounts),
     projectOrder: strings(next.projectOrder), layout: cleanLayout(next.layout),
+    totalHidden: strings(next.totalHidden), totalLayout: strings(next.totalLayout),
   }
   const old = readHomeSettings(await ctx.storage.list('appSettings'))
   if (JSON.stringify(old) === JSON.stringify(clean)) return
@@ -98,4 +105,21 @@ export async function saveHomeSettings(ctx: CoreContext, next: HomeSettings): Pr
     put: { appSettings: [{ key: HOME_KEY, value: clean as unknown as Json }] },
     audit: [auditEntry(ctx, 'setting_changed', { tableName: 'app_settings', recordId: HOME_KEY, oldData: old as unknown as Json, newData: clean as unknown as Json })],
   })
+}
+
+/**
+ * Состав блока «Общий итог» сверху вниз: id разделов и разделителей. Сохранённый порядок (без исчезнувших и скрытых разделов
+ * и без повторов), затем остальные не скрытые разделы в порядке Главной.
+ */
+export function totalItems(h: Pick<HomeSettings, 'totalHidden' | 'totalLayout' | 'projectOrder'>, projects: { id: string }[]): string[] {
+  const avail = orderProjects(h.projectOrder, projects).map((p) => p.id).filter((id) => !h.totalHidden.includes(id))
+  const ok = new Set(avail)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const id of h.totalLayout) {
+    if (seen.has(id)) continue
+    if (isDivider(id) || ok.has(id)) { out.push(id); seen.add(id) }
+  }
+  for (const id of avail) if (!seen.has(id)) out.push(id)
+  return out
 }

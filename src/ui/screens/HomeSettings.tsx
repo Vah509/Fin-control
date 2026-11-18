@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  isDivider, newDividerId, orderProjects, projectItems, saveHomeSettings, type HomeBlock, type HomeSettings,
+  isDivider, newDividerId, orderProjects, projectItems, saveHomeSettings, totalItems, type HomeBlock, type HomeSettings,
 } from '../../core'
 import type { Account, Project } from '../../data/types'
 import { useApp } from '../app'
@@ -43,6 +43,30 @@ function SectionList({ project, accounts, h, save }: {
   )
 }
 
+/** Порядок разделов и разделителей блока «Общий итог». */
+function TotalList({ items, projects, h, save }: {
+  items: string[]; projects: Project[]; h: HomeSettings; save: (next: HomeSettings) => Promise<void>
+}) {
+  const drag = useDragSort(items, true, (next) => save({ ...h, totalLayout: next }))
+  const byId = new Map(projects.map((p) => [p.id, p]))
+  return (
+    <ul className="plain rows">
+      {drag.order.map((id, i) => isDivider(id) ? (
+        <li key={id} ref={drag.setEl(id)} className={`row divider-row${drag.dragging === id ? ' dragging' : ''}`} style={drag.itemStyle(id, i)}>
+          <span className="drag-handle" aria-label="Перетащить разделитель" role="button" {...drag.handleProps(id)}>⠿</span>
+          <div className="grow muted">— разделитель —</div>
+          <button className="btn small" aria-label="Удалить разделитель" onClick={() => void save({ ...h, totalLayout: items.filter((x) => x !== id) })}>✕</button>
+        </li>
+      ) : (
+        <li key={id} ref={drag.setEl(id)} className={`row${drag.dragging === id ? ' dragging' : ''}`} style={drag.itemStyle(id, i)}>
+          <span className="drag-handle" aria-label="Перетащить" role="button" {...drag.handleProps(id)}>⠿</span>
+          <div className="row-main grow"><span className="row-title">{byId.get(id)?.name}</span></div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export function HomeSettingsScreen() {
   const { ctx, ref, bump, reloadRef } = useApp()
   const [error, setError] = useState<string | null>(null)
@@ -63,6 +87,10 @@ export function HomeSettingsScreen() {
   })
   const shown = (pid: string) => active.filter((a) => a.projectId === pid && !h.hiddenAccounts.includes(a.id))
   const byId = new Map(projects.map((p) => [p.id, p]))
+  const tItems = totalItems(h, ref.projects)
+  const toggleTotal = (id: string) => save({
+    ...h, totalHidden: h.totalHidden.includes(id) ? h.totalHidden.filter((x) => x !== id) : [...h.totalHidden, id],
+  })
 
   return (
     <Screen title="Настройки главного экрана" back={<BackButton to="settings" />}>
@@ -84,6 +112,27 @@ export function HomeSettingsScreen() {
           ))}
         </ul>
       </div>
+
+      <div className="card form">
+        <div className="label">Блок «Общий итог»: какие разделы входят</div>
+        <p className="muted">Итог и суммы групп считаются только по отмеченным разделам.</p>
+        {projects.map((p) => (
+          <label key={p.id} className="check">
+            <input type="checkbox" checked={!h.totalHidden.includes(p.id)} disabled={!owner} onChange={() => void toggleTotal(p.id)} />{p.name}
+          </label>
+        ))}
+      </div>
+
+      {owner && (
+        <div className="card">
+          <div className="row" style={{ alignItems: 'center' }}>
+            <div className="label grow">Блок «Общий итог»: порядок и разделители</div>
+            <button className="btn small" aria-label="Добавить разделитель" onClick={() => void save({ ...h, totalLayout: [newDividerId(ctx), ...tItems] })}>―</button>
+          </div>
+          <p className="muted">Сумма над разделителем и первой группой: все разделы до следующего разделителя. Внизу общий итог.</p>
+          <TotalList items={tItems} projects={ref.projects} h={h} save={save} />
+        </div>
+      )}
 
       <div className="card form">
         <div className="label">Блок «Счета»: какие счета показывать</div>

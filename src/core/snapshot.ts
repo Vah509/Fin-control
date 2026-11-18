@@ -207,3 +207,39 @@ export async function getEnteredSnapshot(
   }
   return { rows, dateByAccount, missing, totals: summarize(rows, e.base) }
 }
+
+export interface TotalProject { projectId: string; baseMinor: number; complete: boolean }
+export interface TotalGroup { projects: TotalProject[]; baseMinor: number; complete: boolean }
+export interface ProjectTotals {
+  /** Группы разделов между разделителями (пустые пропущены). */
+  groups: TotalGroup[]
+  /** Есть ли хоть один разделитель между непустыми группами (тогда у групп показываются суммы). */
+  split: boolean
+  /** Итог только по включённым разделам: по валютам и в базовой валюте. */
+  totals: SnapshotTotals
+}
+
+/**
+ * Блок «Общий итог»: `items` = id разделов и разделителей в порядке показа (`totalItems`). Сумма группы = разделы от
+ * разделителя до следующего. В итог входят только разделы из `items`; счета и курсы как в `rows`. Раздел без строк пропускается.
+ */
+export function projectTotals(items: string[], rows: SnapshotRow[], baseCurrency: string): ProjectTotals {
+  const groups: TotalGroup[] = []
+  const used: SnapshotRow[] = []
+  let cur: TotalProject[] = []
+  let curRows: SnapshotRow[] = []
+  const flush = () => {
+    if (cur.length) { const t = summarize(curRows, baseCurrency); groups.push({ projects: cur, baseMinor: t.baseMinor, complete: t.complete }) }
+    cur = []; curRows = []
+  }
+  for (const id of items) {
+    if (id.startsWith('div:')) { flush(); continue }
+    const rs = rows.filter((r) => r.projectId === id)
+    if (!rs.length) continue
+    const t = summarize(rs, baseCurrency)
+    cur.push({ projectId: id, baseMinor: t.baseMinor, complete: t.complete })
+    curRows.push(...rs); used.push(...rs)
+  }
+  flush()
+  return { groups, split: groups.length > 1, totals: summarize(used, baseCurrency) }
+}
