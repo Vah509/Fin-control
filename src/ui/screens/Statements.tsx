@@ -1,8 +1,9 @@
 // Выписки: список задач, новая загрузка (шаг 1), страница задачи (шаги 2 и далее). Задачи хранятся в базе.
 import { useState } from 'react'
-import { createStatementTask, deleteStatementTask, formatMinor, listStatementTasks, recordCounterpartyUpload, taskStatement, updateTaskState } from '../../core'
+import { createStatementTask, deleteStatementTask, finishStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, saveComparison, taskStatement, updateTaskState } from '../../core'
+import type { ProblemDetails } from '../../core'
 import {
-  applyCounterpartyFile, buildCounterpartyWorkbook, buildOperationsWorkbook, extractPdfPages, operationsFileName, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
+  applyCounterpartyFile, buildCounterpartyWorkbook, buildOperationsWorkbook, compareWithDb, extractPdfPages, operationsFileName, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
 } from '../../core/statements'
 import type { StatementTaskState } from '../../core'
 import type { StatementTask } from '../../data/types'
@@ -34,8 +35,9 @@ async function readPicked(file: File | undefined): Promise<Picked | null> {
 }
 
 function stepLabel(t: StatementTask): string {
-  const s = t.state as { counterpartiesLoaded?: boolean; operationsDone?: boolean }
+  const s = t.state as { counterpartiesLoaded?: boolean; operationsDone?: boolean; problemsCount?: number }
   if (t.status === 'done' || s.operationsDone) return 'завершена'
+  if (s.problemsCount) return `шаг 3: проблем ${s.problemsCount}`
   return s.counterpartiesLoaded ? 'шаг 3: операции' : 'шаг 2: контрагенты'
 }
 
@@ -111,6 +113,36 @@ export function StatementTaskScreen({ taskId }: { taskId: string }) {
   )
 }
 
+export function StatementProblemsScreen({ taskId }: { taskId: string }) {
+  const { ctx } = useApp()
+  const list = useLoad(() => listTaskProblems(ctx, taskId), [taskId])
+  return (
+    <Screen title="Проблемы выписки" back={<BackButton to="statementTask" label="Загрузка" />}>
+      {list.loading && <Loading />}
+      {list.error && <ErrorBox text={list.error} onRetry={list.reload} />}
+      {list.data && list.data.length === 0 && <p className="muted">Проблем нет.</p>}
+      {list.data && list.data.length > 0 && (
+        <>
+          <p className="muted">Операции, которые есть в базе, но их нет в выписке. Решения пока нет: проблемы только фиксируются. После пересчёта (шаг 3 на странице задачи) список обновится.</p>
+          <ul className="plain rows">
+            {list.data.map((p) => {
+              const d = p.details as unknown as ProblemDetails
+              return (
+                <li key={p.id} className="row">
+                  <div className="row-main grow">
+                    <span className="row-title">{dateRu(d.date)} · {formatMinor(d.amountMinor, 2)} {d.currency}</span>
+                    <span className="row-sub">…{d.accountKey} {d.accountName} · {d.type}{d.counterparty ? ` · ${d.counterparty}` : ''}{d.comment ? ` · ${d.comment}` : ''}</span>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
+    </Screen>
+  )
+}
+
 function TaskView({ task, reload }: { task: StatementTask; reload: () => void }) {
   const { ctx, go, bump } = useApp()
   const [busy, setBusy] = useState(false)
@@ -139,10 +171,13 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
   })
   const downloadOps = () => run(async () => {
     const name = operationsFileName(st)
-    await saveFile(name, await buildOperationsWorkbook(ctx, st), XLSX)
-    if (!state.operationsDone) await updateTaskState(ctx, task.id, { operationsDone: true })
-    return `Файл создан: ${name}. Строки с расхождением сверки подсвечены красным.`
+    const cmp = await compareWithDb(ctx, st)
+    await saveComparison(ctx, task.id, cmp)
+    await saveFile(name, await buildOperationsWorkbook(ctx, st, cmp), XLSX)
+    bump()
+    return `Файл создан: ${name}. Проблем: ${cmp.dbOnly.length}.`
   })
+  const finish = () => run(async () => { await finishStatementTask(ctx, task.id); bump(); return 'Задача закрыта. В базу движения пока не записывались.' })
   async function remove() {
     if (!window.confirm('Удалить загрузку? Разобранные данные будут стёрты. Уже записанные контрагенты останутся.')) return
     setBusy(true)
@@ -187,8 +222,20 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
         {!state.counterpartiesLoaded && <p className="muted">Станет доступен после шага 2.</p>}
         {state.counterpartiesLoaded && (
           <>
-            <p className="muted">{state.operationsDone ? 'Файл уже создавался. Можно скачать ещё раз (например, после правки контрагентов).' : 'Листы «Операции» и «Сверка»; контрагенты из справочника; расхождения красным. В базу ничего не пишется.'}</p>
-            <button className="btn primary" disabled={busy} onClick={() => void downloadOps()}>Скачать «Операции + Сверка»</button>
+            <p className="muted">Приложение сравнит выписку с операциями в базе за период выписки. Нормально: операции нет в базе (будет записана) или она есть и там и там. Проблема: операция есть в базе, а в выписке нет. В файле плюсы в колонках «В выписке» и «В базе».</p>
+            {state.comparedAt && (state.missingAccounts?.length ?? 0) > 0 && (
+              <Notice kind="warn">Нет в базе (или признак счёта неоднозначен): …{state.missingAccounts!.join(', …')}. По ним сравнения не было, «В базе» пусто.</Notice>
+            )}
+            {state.comparedAt && !state.operationsDone && (state.problemsCount ?? 0) === 0 && <Notice kind="ok">Проблем нет. Можно нажать «Готово».</Notice>}
+            {state.comparedAt && !state.operationsDone && (state.problemsCount ?? 0) > 0 && <Notice kind="warn">Проблем: {state.problemsCount}. Откройте «Проблемы».</Notice>}
+            {state.operationsDone && <Notice kind="ok">Задача закрыта.</Notice>}
+            <button className="btn primary" disabled={busy} onClick={() => void downloadOps()}>{state.comparedAt ? 'Сравнить и скачать файл ещё раз' : 'Сравнить с базой и скачать файл'}</button>
+            {!state.operationsDone && state.comparedAt && (state.problemsCount ?? 0) > 0 && (
+              <button className="btn" disabled={busy} onClick={() => go('statementProblems', { accountId: task.id })}>Проблемы ({state.problemsCount})</button>
+            )}
+            {!state.operationsDone && state.comparedAt && (state.problemsCount ?? 0) === 0 && (
+              <button className="btn primary" disabled={busy} onClick={() => void finish()}>Готово</button>
+            )}
           </>
         )}
       </div>

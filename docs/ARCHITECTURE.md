@@ -30,7 +30,7 @@ public/        manifest.webmanifest (2 ярлыка), иконки
 | Файл | Что делает |
 |---|---|
 | `context.ts` | `CoreContext`: хранилище, актор (`userId`, `isOwner`), часы, генератор id, шифрование полей |
-| `statements/` (ветка `statement-xlsx`) | разбор выписок: модель, PDF Словакии, сверка, загрузчик слов pdfjs; экран `ui/screens/Statements.tsx`; файл контрагентов (`counterparties.ts` логика и запись в хранилище, `cpWorkbook.ts` XLSX); файл операций (`opsWorkbook.ts`, XLSX «Операции + Сверка», раздел 17); без хранилища (`docs/STATEMENT-XLSX.md`, раздел 14) |
+| `statements/` (ветка `statement-xlsx`) | разбор выписок: модель, PDF Словакии, сверка, загрузчик слов pdfjs; экран `ui/screens/Statements.tsx`; файл контрагентов (`counterparties.ts` логика и запись в хранилище, `cpWorkbook.ts` XLSX); файл операций (`opsWorkbook.ts`, XLSX «Операции + Сверка», разделы 17-18); сравнение с базой (`compare.ts`); проблемы и «Готово» (`core/statementProblems.ts`); экран `StatementProblemsScreen`; без хранилища (`docs/STATEMENT-XLSX.md`, раздел 14) |
 | `money.ts`, `time.ts` | минорные единицы, разбор и форматирование, курсы как дроби, локальные дни и пояса |
 | `settings.ts` | настройки (`base_currency`, `default_timezone`, `fx_pivot_currency`), пояс счёта, `setBaseCurrency` (только владелец, UAH/EUR/USD, журнал) |
 | `fx.ts` | `FxResolver`: прямая, обратная пара, через опорную валюту; приоритет источников; «нет курса» |

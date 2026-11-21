@@ -126,6 +126,12 @@ export interface StatementTask {
   state: Json; payload: Json
   createdBy: string | null; createdAt: string; updatedAt: string
 }
+/** Проблема сравнения выписки с базой (привязана к задаче). kind: db_only = операция есть в базе, в выписке нет. details: данные для показа. */
+export type StatementProblemKind = 'db_only'
+export interface StatementProblem {
+  id: string; taskId: string; kind: StatementProblemKind; status: 'open' | 'resolved'
+  transactionId: string | null; details: Json; createdAt: string
+}
 export interface ImportJob {
   id: string; status: ImportJobStatus
   accounts: ImportJobAccount[]
@@ -156,6 +162,7 @@ export interface EntityMap {
   fxSourcePriorities: FxSourcePriority
   importJobs: ImportJob
   statementTasks: StatementTask
+  statementProblems: StatementProblem
 }
 export type EntityName = keyof EntityMap
 
@@ -165,6 +172,6 @@ export const PRIMARY_KEY: { [K in EntityName]: keyof EntityMap[K] & string } = {
   institutions: 'id', projects: 'id', accounts: 'id', accountIdentifiers: 'id',
   tagGroups: 'id', tags: 'id', counterparties: 'id', counterpartyIdentifiers: 'id',
   transactions: 'id', checkpoints: 'id', periodLocks: 'id', fxRates: 'id',
-  fxSourcePriorities: 'source', importJobs: 'id', statementTasks: 'id',
+  fxSourcePriorities: 'source', importJobs: 'id', statementTasks: 'id', statementProblems: 'id',
 }
 export const ENTITY_NAMES = Object.keys(PRIMARY_KEY) as EntityName[]

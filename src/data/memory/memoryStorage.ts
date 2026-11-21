@@ -88,6 +88,9 @@ export class MemoryStorage implements Storage {
     const nextAudit = [...this.audit]
     let seq = this.auditSeq
 
+    const dropTasks = new Set(batch.deleteProblemTaskIds ?? [])
+    for (const [k, p] of next.statementProblems) if (dropTasks.has(p.taskId)) next.statementProblems.delete(k)
+
     for (const name of ENTITY_NAMES) {
       const rows = batch.put?.[name]
       if (!rows) continue

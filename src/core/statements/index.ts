@@ -6,3 +6,5 @@ export { collectCounterpartyGroups, recognizeGroups, applyCounterpartyFile } fro
 export type { CpGroup, CpFileRow, CpFileResult } from './counterparties'
 export { buildCounterpartyWorkbook, readCounterpartyWorkbook } from './cpWorkbook'
 export { buildOperationsWorkbook, operationsFileName, OPS_SHEET, RECON_SHEET } from './opsWorkbook'
+export { compareWithDb, cmpKey } from './compare'
+export type { Comparison, DbOnlyItem } from './compare'

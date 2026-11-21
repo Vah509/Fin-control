@@ -87,4 +87,11 @@ describe('слой Supabase: преобразование колонок', () =>
     expect(r['file_name']).toBe('a.pdf')
     expect(fromRow('statementTasks', r, env)).toEqual(task)
   })
+
+  it('statementProblems: имена колонок', () => {
+    const p = { id: 'p', taskId: 't', kind: 'db_only' as const, status: 'open' as const, transactionId: null, details: { a: 1 }, createdAt: '2026-11-21T10:00:00.000Z' }
+    const r = toRow('statementProblems', p, env)
+    expect(r['task_id']).toBe('t')
+    expect(fromRow('statementProblems', r, env)).toEqual(p)
+  })
 })

@@ -9,7 +9,7 @@ import type {
 export type SmallEntity =
   | 'appSettings' | 'planTypes' | 'countries' | 'currencies' | 'institutions' | 'projects'
   | 'accounts' | 'tagGroups' | 'tags' | 'counterparties' | 'counterpartyIdentifiers'
-  | 'fxSourcePriorities' | 'importJobs' | 'statementTasks'
+  | 'fxSourcePriorities' | 'importJobs' | 'statementTasks' | 'statementProblems'
 
 export interface TransactionQuery {
   accountId?: string
@@ -30,6 +30,8 @@ export interface AuditQuery { limit?: number; beforeId?: number }
 export interface WriteBatch {
   put?: { [K in EntityName]?: EntityMap[K][] }
   deleteTransactionIds?: string[]
+  /** Удалить все проблемы указанных задач выписок (выполняется до записи put). */
+  deleteProblemTaskIds?: string[]
   audit?: NewAuditEntry[]
   /** Выдать пользователю доступ владельца к новым счетам. Хранилище без пользователей (память, SQLite) это игнорирует. */
   grantOwnerAccess?: { accountId: string; userId: string }[]

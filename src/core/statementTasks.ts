@@ -12,6 +12,8 @@ export interface StatementTaskState {
   counterpartiesLoaded?: boolean; counterpartyFileDownloaded?: boolean; operationsDone?: boolean
   /** шаг 2: имя последнего загруженного файла, время и накопленный итог (повторная загрузка не стирает результат) */
   counterpartiesFile?: string; counterpartiesAt?: string; counterpartiesTotals?: CpTotals
+  /** шаг 3: файл скачан, время сравнения с базой, число проблем, счета без пары в базе */
+  operationsFileDownloaded?: boolean; comparedAt?: string; problemsCount?: number; missingAccounts?: string[]
 }
 
 const IBAN_RE = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,6}(?:\s?[A-Z0-9]{1,4})?\b/g
@@ -47,7 +49,7 @@ export async function listStatementTasks(ctx: CoreContext): Promise<StatementTas
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id.localeCompare(a.id))
 }
 
-async function getTask(ctx: CoreContext, id: string): Promise<StatementTask> {
+export async function getTask(ctx: CoreContext, id: string): Promise<StatementTask> {
   return (await ctx.storage.list('statementTasks')).find((t) => t.id === id && t.status !== 'deleted') ?? fail('NOT_FOUND', 'задача выписки не найдена')
 }
 
@@ -82,11 +84,12 @@ export async function recordCounterpartyUpload(ctx: CoreContext, id: string, fil
   return updateTaskState(ctx, id, { counterpartiesLoaded: true, counterpartiesFile: fileName, counterpartiesAt: ctx.now().toISOString(), counterpartiesTotals: totals })
 }
 
-/** Удаление: задача пропадает с экрана, разобранные данные стираются. Уже записанные контрагенты остаются. */
+/** Удаление: задача пропадает с экрана, разобранные данные стираются. Проблемы задачи удаляются. Уже записанные контрагенты остаются. */
 export async function deleteStatementTask(ctx: CoreContext, id: string): Promise<void> {
   const t = await getTask(ctx, id)
   await ctx.storage.applyBatch({
     put: { statementTasks: [{ ...t, status: 'deleted', payload: null, state: {}, updatedAt: ctx.now().toISOString() }] },
+    deleteProblemTaskIds: [id],
     audit: [auditEntry(ctx, 'statement_task_deleted', { tableName: 'statement_tasks', recordId: id })],
   })
 }

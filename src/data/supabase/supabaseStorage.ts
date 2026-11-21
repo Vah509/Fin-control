@@ -175,7 +175,7 @@ export class SupabaseStorage implements Storage {
   async applyBatch(batch: WriteBatch): Promise<void> {
     const put = batch.put ?? {}
     const hasPut = ENTITY_NAMES.some((n) => (put[n]?.length ?? 0) > 0)
-    const hasDel = (batch.deleteTransactionIds?.length ?? 0) > 0
+    const hasDel = (batch.deleteTransactionIds?.length ?? 0) > 0 || (batch.deleteProblemTaskIds?.length ?? 0) > 0
     const hasAudit = (batch.audit?.length ?? 0) > 0
     const grants = batch.grantOwnerAccess ?? []
     if (!hasPut && !hasDel && !hasAudit && grants.length === 0) return
@@ -191,8 +191,8 @@ export class SupabaseStorage implements Storage {
       accountCurrency: (id) => accountCur.get(id) ?? this.missing(`счёт ${id}`),
     }
 
-    const payload: { put: Record<string, Row[]>; delete_transaction_ids: string[]; audit: Row[] } = {
-      put: {}, delete_transaction_ids: batch.deleteTransactionIds ?? [], audit: (batch.audit ?? []).map(auditToRow),
+    const payload: { put: Record<string, Row[]>; delete_transaction_ids: string[]; delete_problem_task_ids: string[]; audit: Row[] } = {
+      put: {}, delete_transaction_ids: batch.deleteTransactionIds ?? [], delete_problem_task_ids: batch.deleteProblemTaskIds ?? [], audit: (batch.audit ?? []).map(auditToRow),
     }
     for (const name of WRITE_ORDER) {
       const rows = put[name] as EntityMap[typeof name][] | undefined
