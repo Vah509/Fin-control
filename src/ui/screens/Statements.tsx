@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { createStatementTask, deleteStatementTask, formatMinor, listStatementTasks, recordCounterpartyUpload, taskStatement, updateTaskState } from '../../core'
 import {
-  applyCounterpartyFile, buildCounterpartyWorkbook, extractPdfPages, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
+  applyCounterpartyFile, buildCounterpartyWorkbook, buildOperationsWorkbook, extractPdfPages, operationsFileName, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
 } from '../../core/statements'
 import type { StatementTaskState } from '../../core'
 import type { StatementTask } from '../../data/types'
@@ -137,6 +137,12 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
     bump()
     return `Принято. Строк: ${r.rowsLinked}, новых контрагентов: ${r.created}, признаков добавлено: ${r.identifiersAdded}${r.reassigned ? `, переназначено: ${r.reassigned}` : ''}.`
   })
+  const downloadOps = () => run(async () => {
+    const name = operationsFileName(st)
+    await saveFile(name, await buildOperationsWorkbook(ctx, st), XLSX)
+    if (!state.operationsDone) await updateTaskState(ctx, task.id, { operationsDone: true })
+    return `Файл создан: ${name}. Строки с расхождением сверки подсвечены красным.`
+  })
   async function remove() {
     if (!window.confirm('Удалить загрузку? Разобранные данные будут стёрты. Уже записанные контрагенты останутся.')) return
     setBusy(true)
@@ -177,8 +183,14 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
         <button className="btn primary" disabled={busy || !xlsx} onClick={() => void upload()}>Загрузить правленый файл</button>
       </div>
       <div className="card">
-        <p className={state.counterpartiesLoaded ? '' : 'muted'}>{state.counterpartiesLoaded ? '→' : '○'} Шаг 3. Файл «Операции + Сверка»</p>
-        <p className="muted">{state.counterpartiesLoaded ? 'Сейчас нужно: шаг 3. Он будет в следующей версии, загрузка подождёт здесь на этом шаге.' : 'Станет доступен после шага 2.'}</p>
+        <p className={state.counterpartiesLoaded ? '' : 'muted'}>{state.operationsDone ? '✓' : state.counterpartiesLoaded ? '→' : '○'} Шаг 3. Файл «Операции + Сверка»</p>
+        {!state.counterpartiesLoaded && <p className="muted">Станет доступен после шага 2.</p>}
+        {state.counterpartiesLoaded && (
+          <>
+            <p className="muted">{state.operationsDone ? 'Файл уже создавался. Можно скачать ещё раз (например, после правки контрагентов).' : 'Листы «Операции» и «Сверка»; контрагенты из справочника; расхождения красным. В базу ничего не пишется.'}</p>
+            <button className="btn primary" disabled={busy} onClick={() => void downloadOps()}>Скачать «Операции + Сверка»</button>
+          </>
+        )}
       </div>
       {busy && <p className="muted">Подождите…</p>}
       {msg && <Notice kind={msg.kind === 'ok' ? 'ok' : 'warn'}>{msg.text}</Notice>}

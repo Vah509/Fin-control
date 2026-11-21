@@ -29,6 +29,12 @@ const collapse = (s: string) => s.normalize('NFKC').trim().replace(/\s+/g, ' ')
 const ibanKey = (iban: string) => normalizeIdentifier('account_number', iban)
 const activeOn = (i: { validFrom: string; validTo: string | null }, d: string) => i.validFrom <= d && d <= (i.validTo ?? '9999-12-31')
 
+/** Ключ группы контрагента (общий для файла контрагентов и файла операций). */
+export function groupKeyOf(c: { name: string; iban: string | null }): string {
+  const text = collapse(c.name)
+  return c.iban ? `iban:${ibanKey(c.iban)}` : `name:${nameKey(text)}`
+}
+
 /** Уникальные контрагенты по всем счетам выписки (порядок первого появления). */
 export function collectCounterpartyGroups(st: ParsedStatement): CpGroup[] {
   const map = new Map<string, CpGroup>()
@@ -37,7 +43,7 @@ export function collectCounterpartyGroups(st: ParsedStatement): CpGroup[] {
       const c = r.counterparty
       const text = collapse(c.name)
       if (!text) continue
-      const key = c.iban ? `iban:${ibanKey(c.iban)}` : `name:${nameKey(text)}`
+      const key = groupKeyOf(c)
       const g = map.get(key)
       if (g) g.rows++
       else map.set(key, { text, iban: c.iban ? ibanKey(c.iban).toUpperCase() : null, kind: c.kind, rows: 1 })
