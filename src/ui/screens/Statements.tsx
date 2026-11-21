@@ -20,19 +20,29 @@ async function saveFile(name: string, bytes: Uint8Array, type: string): Promise<
   setTimeout(() => URL.revokeObjectURL(url), 10_000)
 }
 
+interface Picked { name: string; bytes: Uint8Array }
+
 export function StatementsScreen() {
   const { ctx, bump } = useApp()
   const [busy, setBusy] = useState(false)
   const [parsed, setParsed] = useState<{ st: ParsedStatement; name: string } | null>(null)
+  const [pdf, setPdf] = useState<Picked | null>(null)
+  const [xlsx, setXlsx] = useState<Picked | null>(null)
   const [msg, setMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
 
-  async function pickPdf(file: File | undefined) {
-    setMsg(null); setParsed(null)
-    if (!file) return
-    setBusy(true)
+  // Файл читается в память сразу при выборе (на Android иначе бывает «0 байт»); поле выбора не очищается.
+  async function choose(file: File | undefined, set: (v: Picked | null) => void) {
+    setMsg(null)
+    if (!file) { set(null); return }
+    try { set({ name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) }) } catch (e) { set(null); setMsg({ kind: 'error', text: errorText(e) }) }
+  }
+
+  async function parsePdf() {
+    if (!pdf) return
+    setMsg(null); setParsed(null); setBusy(true)
     try {
-      const pages = await extractPdfPages(new Uint8Array(await file.arrayBuffer()))
-      setParsed({ st: parseSlspStatement(pages), name: file.name })
+      if (!pdf.bytes.length) throw new Error('Файл пустой (0 байт). Выберите его ещё раз, лучше из «Загрузки».')
+      setParsed({ st: parseSlspStatement(await extractPdfPages(pdf.bytes.slice())), name: pdf.name })
     } catch (e) { setMsg({ kind: 'error', text: errorText(e) }) } finally { setBusy(false) }
   }
 
@@ -47,11 +57,11 @@ export function StatementsScreen() {
     } catch (e) { setMsg({ kind: 'error', text: errorText(e) }) } finally { setBusy(false) }
   }
 
-  async function loadCp(file: File | undefined) {
-    if (!file) return
+  async function loadCp() {
+    if (!xlsx) return
     setBusy(true); setMsg(null)
     try {
-      const r = await applyCounterpartyFile(ctx, await readCounterpartyWorkbook(new Uint8Array(await file.arrayBuffer())))
+      const r = await applyCounterpartyFile(ctx, await readCounterpartyWorkbook(xlsx.bytes.slice()))
       bump()
       setMsg({ kind: 'ok', text: `Принято. Строк: ${r.rowsLinked}, новых контрагентов: ${r.created}, признаков добавлено: ${r.identifiersAdded}${r.reassigned ? `, переназначено: ${r.reassigned}` : ''}.` })
     } catch (e) { setMsg({ kind: 'error', text: errorText(e) }) } finally { setBusy(false) }
@@ -61,7 +71,9 @@ export function StatementsScreen() {
     <Screen title="Выписки">
       <div className="card">
         <p>1. Выберите PDF выписки Slovenská sporiteľňa. Разбор идёт на телефоне, файл никуда не отправляется и не хранится.</p>
-        <input type="file" accept="application/pdf,.pdf" disabled={busy} onChange={(e) => { void pickPdf(e.target.files?.[0]); e.target.value = '' }} />
+        <input type="file" accept="application/pdf,.pdf" disabled={busy} onChange={(e) => void choose(e.target.files?.[0], setPdf)} />
+        {pdf && <p className="muted">Выбран: {pdf.name}</p>}
+        <button className="btn primary" disabled={busy || !pdf} onClick={() => void parsePdf()}>Загрузить и разобрать</button>
       </div>
       {busy && <p className="muted">Подождите…</p>}
       {msg && <Notice kind={msg.kind === 'ok' ? 'ok' : 'warn'}>{msg.text}</Notice>}
@@ -87,7 +99,9 @@ export function StatementsScreen() {
       )}
       <div className="card">
         <p>{parsed ? '3.' : '2.'} Загрузить правленый файл контрагентов (XLSX). Если в файле ошибка, ничего не записывается.</p>
-        <input type="file" accept=".xlsx" disabled={busy} onChange={(e) => { void loadCp(e.target.files?.[0]); e.target.value = '' }} />
+        <input type="file" accept=".xlsx" disabled={busy} onChange={(e) => void choose(e.target.files?.[0], setXlsx)} />
+        {xlsx && <p className="muted">Выбран: {xlsx.name}</p>}
+        <button className="btn primary" disabled={busy || !xlsx} onClick={() => void loadCp()}>Загрузить файл контрагентов</button>
       </div>
     </Screen>
   )
