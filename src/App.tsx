@@ -11,6 +11,7 @@ import { Home } from './ui/screens/Home'
 import { SnapshotScreen } from './ui/screens/Snapshot'
 import { BalanceScreen } from './ui/screens/Balance'
 import { MovesScreen } from './ui/screens/Moves'
+import { StatementsScreen } from './ui/screens/Statements'
 import { AccountsScreen } from './ui/screens/Accounts'
 import { MoreScreen } from './ui/screens/More'
 import { PeriodsScreen } from './ui/screens/Periods'
@@ -30,12 +31,12 @@ import type { Session, SupabaseClient } from '@supabase/supabase-js'
 const TABS: { page: Page; label: string; icon: string }[] = [
   { page: 'home', label: 'Главная', icon: '⌂' },
   { page: 'accounts', label: 'Счета', icon: '▭' },
-  { page: 'moves', label: 'Движения', icon: '⇅' },
+  { page: 'statements', label: 'Выписки', icon: '⇅' },
   { page: 'snapshot', label: 'Аналитика', icon: '▤' },
   { page: 'more', label: 'Прочее', icon: '⋯' },
 ]
 const TAB_OF: Record<Page, Page> = {
-  home: 'home', balance: 'home', snapshot: 'snapshot', moves: 'moves', accounts: 'accounts',
+  home: 'home', balance: 'home', snapshot: 'snapshot', moves: 'more', statements: 'statements', accounts: 'accounts',
   more: 'more', periods: 'more', dump: 'more', settings: 'more', baseCurrency: 'more', homeSettings: 'more', accountsSettings: 'more', enterBalances: 'more', account: 'accounts', newAccount: 'accounts', imports: 'more', importNew: 'more', importJob: 'more',
 }
 
@@ -152,6 +153,7 @@ export function Shell({ db, ctx, initialRef, email }: { db: SupabaseClient; ctx:
           {page === 'snapshot' && <SnapshotScreen />}
           {page === 'balance' && <BalanceScreen initialAccountId={accountId} />}
           {page === 'moves' && <MovesScreen />}
+          {page === 'statements' && <StatementsScreen />}
           {page === 'accounts' && <AccountsScreen />}
           {page === 'more' && <MoreScreen />}
           {page === 'periods' && <PeriodsScreen />}
