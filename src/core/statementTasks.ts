@@ -7,7 +7,12 @@ import type { CoreContext } from './context'
 import { fail } from './errors'
 import type { ParsedStatement } from './statements/types'
 
-export interface StatementTaskState { counterpartiesLoaded?: boolean; counterpartyFileDownloaded?: boolean; operationsDone?: boolean }
+export interface CpTotals { rows: number; created: number; identifiersAdded: number; reassigned: number }
+export interface StatementTaskState {
+  counterpartiesLoaded?: boolean; counterpartyFileDownloaded?: boolean; operationsDone?: boolean
+  /** шаг 2: имя последнего загруженного файла, время и накопленный итог (повторная загрузка не стирает результат) */
+  counterpartiesFile?: string; counterpartiesAt?: string; counterpartiesTotals?: CpTotals
+}
 
 const IBAN_RE = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,6}(?:\s?[A-Z0-9]{1,4})?\b/g
 const maskIbans = (s: string) => s.replace(IBAN_RE, (m) => `IBAN…${m.replace(/\s/g, '').slice(-4)}`)
@@ -67,6 +72,14 @@ export async function updateTaskState(ctx: CoreContext, id: string, patch: State
   const next: StatementTask = { ...t, state: state as Json, status: state.operationsDone ? 'done' : 'active', updatedAt: ctx.now().toISOString() }
   await ctx.storage.applyBatch({ put: { statementTasks: [next] } })
   return next
+}
+
+/** Итог загрузки файла контрагентов: имя файла, время, суммарный результат по всем загрузкам этой задачи. */
+export async function recordCounterpartyUpload(ctx: CoreContext, id: string, fileName: string, r: CpTotals): Promise<StatementTask> {
+  const t = await getTask(ctx, id)
+  const prev = (t.state as StatementTaskState).counterpartiesTotals
+  const totals: CpTotals = { rows: r.rows, created: (prev?.created ?? 0) + r.created, identifiersAdded: (prev?.identifiersAdded ?? 0) + r.identifiersAdded, reassigned: (prev?.reassigned ?? 0) + r.reassigned }
+  return updateTaskState(ctx, id, { counterpartiesLoaded: true, counterpartiesFile: fileName, counterpartiesAt: ctx.now().toISOString(), counterpartiesTotals: totals })
 }
 
 /** Удаление: задача пропадает с экрана, разобранные данные стираются. Уже записанные контрагенты остаются. */

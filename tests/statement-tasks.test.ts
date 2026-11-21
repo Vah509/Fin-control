@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createStatementTask, deleteStatementTask, listStatementTasks, maskStatement, taskStatement, updateTaskState } from '../src/core'
+import { recordCounterpartyUpload, createStatementTask, deleteStatementTask, listStatementTasks, maskStatement, taskStatement, updateTaskState } from '../src/core'
 import { applyCounterpartyFile, buildCounterpartyWorkbook, parseSlspStatement, readCounterpartyWorkbook } from '../src/core/statements'
 import { setup } from './helpers'
 import { buildSlsp } from './statements/slspFixture'
@@ -34,6 +34,14 @@ describe('задачи выписок', () => {
     await deleteStatementTask(ctx, t.id)
     expect(await listStatementTasks(ctx)).toEqual([])
     expect((await storage.list('statementTasks'))[0]!.payload).toBeNull()
+  })
+
+  it('итог шага 2 накапливается, повторная загрузка его не стирает', async () => {
+    const { ctx } = await setup()
+    const t = await createStatementTask(ctx, stmt(), 'v.pdf')
+    await recordCounterpartyUpload(ctx, t.id, 'a.xlsx', { rows: 2, created: 2, identifiersAdded: 2, reassigned: 0 })
+    const n = await recordCounterpartyUpload(ctx, t.id, 'b.xlsx', { rows: 2, created: 0, identifiersAdded: 0, reassigned: 0 })
+    expect(n.state).toMatchObject({ counterpartiesLoaded: true, counterpartiesFile: 'b.xlsx', counterpartiesTotals: { rows: 2, created: 2, identifiersAdded: 2 } })
   })
 
   it('без ключей шифрования: файл контрагентов работает по названиям (из сохранённой задачи)', async () => {

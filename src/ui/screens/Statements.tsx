@@ -1,9 +1,10 @@
 // Выписки: список задач, новая загрузка (шаг 1), страница задачи (шаги 2 и далее). Задачи хранятся в базе.
 import { useState } from 'react'
-import { createStatementTask, deleteStatementTask, formatMinor, listStatementTasks, taskStatement, updateTaskState } from '../../core'
+import { createStatementTask, deleteStatementTask, formatMinor, listStatementTasks, recordCounterpartyUpload, taskStatement, updateTaskState } from '../../core'
 import {
   applyCounterpartyFile, buildCounterpartyWorkbook, extractPdfPages, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
 } from '../../core/statements'
+import type { StatementTaskState } from '../../core'
 import type { StatementTask } from '../../data/types'
 import { useApp } from '../app'
 import { useLoad } from '../hooks'
@@ -116,7 +117,7 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
   const [msg, setMsg] = useState<Msg>(null)
   const [xlsx, setXlsx] = useState<Picked | null>(null)
   const st = taskStatement(task)
-  const state = task.state as { counterpartiesLoaded?: boolean; counterpartyFileDownloaded?: boolean }
+  const state = task.state as StatementTaskState
 
   async function run(fn: () => Promise<string>) {
     setBusy(true); setMsg(null)
@@ -132,7 +133,7 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
   const upload = () => run(async () => {
     if (!xlsx) return ''
     const r = await applyCounterpartyFile(ctx, await readCounterpartyWorkbook(xlsx.bytes.slice()))
-    await updateTaskState(ctx, task.id, { counterpartiesLoaded: true })
+    await recordCounterpartyUpload(ctx, task.id, xlsx.name, { ...r, rows: r.rowsLinked })
     bump()
     return `Принято. Строк: ${r.rowsLinked}, новых контрагентов: ${r.created}, признаков добавлено: ${r.identifiersAdded}${r.reassigned ? `, переназначено: ${r.reassigned}` : ''}.`
   })
@@ -147,6 +148,7 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
       <p><b>{task.title}</b></p>
       <div className="card">
         <p>✓ Шаг 1. Файл разобран</p>
+        <p className="muted">Файл: {task.fileName} · {dateTimeRu(task.createdAt)}</p>
         {st.accounts.map((a) => {
           const rec = reconcileAccount(a)
           return (
@@ -161,14 +163,23 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
       </div>
       <div className="card">
         <p>{state.counterpartiesLoaded ? '✓' : '→'} Шаг 2. Контрагенты</p>
-        <p className="muted">Скачайте файл, впишите во 2-ю колонку имена из справочника (пусто = новый контрагент), загрузите обратно. Если в файле ошибка, ничего не записывается.</p>
+        {state.counterpartiesLoaded && state.counterpartiesTotals && (
+          <Notice kind="ok">
+            Загружен файл {state.counterpartiesFile}{state.counterpartiesAt ? ` (${dateTimeRu(state.counterpartiesAt)})` : ''}. Результат: новых контрагентов {state.counterpartiesTotals.created}, признаков добавлено {state.counterpartiesTotals.identifiersAdded}{state.counterpartiesTotals.reassigned ? `, переназначено ${state.counterpartiesTotals.reassigned}` : ''}.
+          </Notice>
+        )}
+        {!state.counterpartiesLoaded && state.counterpartyFileDownloaded && <p className="muted">Файл контрагентов уже скачан. Теперь правьте его и загрузите ниже.</p>}
+        <p className="muted">{state.counterpartiesLoaded ? 'Если нужно что-то поправить, скачайте файл ещё раз и загрузите снова.' : 'Скачайте файл, впишите во 2-ю колонку имена из справочника (пусто = новый контрагент), загрузите обратно. Если в файле ошибка, ничего не записывается.'}</p>
         <button className="btn primary" disabled={busy} onClick={() => void download()}>Скачать файл контрагентов</button>
         <input type="file" accept=".xlsx" disabled={busy}
           onChange={(e) => { setMsg(null); void readPicked(e.target.files?.[0]).then(setXlsx).catch((x) => setMsg({ kind: 'error', text: errorText(x) })) }} />
         {xlsx && <p className="muted">Выбран: {xlsx.name}</p>}
         <button className="btn primary" disabled={busy || !xlsx} onClick={() => void upload()}>Загрузить правленый файл</button>
       </div>
-      <div className="card"><p className="muted">○ Шаг 3. Файл «Операции + Сверка» (будет в следующей версии)</p></div>
+      <div className="card">
+        <p className={state.counterpartiesLoaded ? '' : 'muted'}>{state.counterpartiesLoaded ? '→' : '○'} Шаг 3. Файл «Операции + Сверка»</p>
+        <p className="muted">{state.counterpartiesLoaded ? 'Сейчас нужно: шаг 3. Он будет в следующей версии, загрузка подождёт здесь на этом шаге.' : 'Станет доступен после шага 2.'}</p>
+      </div>
       {busy && <p className="muted">Подождите…</p>}
       {msg && <Notice kind={msg.kind === 'ok' ? 'ok' : 'warn'}>{msg.text}</Notice>}
       <button className="btn" disabled={busy} onClick={() => void remove()}>Удалить загрузку</button>
