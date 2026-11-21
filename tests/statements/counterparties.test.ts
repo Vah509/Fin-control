@@ -91,7 +91,7 @@ describe('файл контрагентов', () => {
     const bytes = await buildCounterpartyWorkbook(ctx, stmt())
     const rows = await readCounterpartyWorkbook(bytes)
     expect(rows.map((r) => [r.row, r.text, r.resolved, r.iban])).toEqual([
-      [2, 'Lidl dakuje 165-BRATISLAVA', 'Lidl', null], [3, 'Lidl dakuje 185-BRATISLAVA', '', null], [4, 'Test Sender', '', 'SK0000000000000000000002'],
+      [2, 'Lidl dakuje 165-BRATISLAVA', 'Lidl', null], [3, 'Lidl dakuje 185-BRATISLAVA', '', null], [4, 'Test Sender', '', 'SK0000000000000000000002'],  // порядок по алфавиту
     ])
     const res = await applyCounterpartyFile(ctx, rows.map((r) => (r.row === 3 ? { ...r, resolved: 'Lidl' } : r)))
     expect(res.created).toBe(1)

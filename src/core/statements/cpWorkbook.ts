@@ -17,7 +17,7 @@ const loadExcel = async (): Promise<any> => {
 /** Выгрузка: читает справочник и опознаёт контрагентов на конец периода выписки. */
 export async function buildCounterpartyWorkbook(ctx: CoreContext, st: ParsedStatement): Promise<Uint8Array> {
   const ExcelJS = await loadExcel()
-  const groups = collectCounterpartyGroups(st)
+  const groups = collectCounterpartyGroups(st).sort((a, b) => a.text.localeCompare(b.text, 'sk', { sensitivity: 'base', numeric: true }))
   const found = await recognizeGroups(ctx, groups)
   const cps = [...(await ctx.storage.list('counterparties'))].sort((a, b) => a.name.localeCompare(b.name, 'ru'))
 
