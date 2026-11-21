@@ -28,6 +28,8 @@ const ERR: Record<ErrorCode, string> = {
   IMPORT_INVALID: 'Ответ чата не принят',
   IMPORT_DUPLICATE: 'Этот ответ уже загружен',
   IMPORT_BLOCKED: 'Загрузка заблокирована: есть нерешённые вопросы или ошибки',
+  STATEMENT_UNRECOGNIZED: 'Файл не похож на выписку этого банка',
+  STATEMENT_PARSE: 'Не удалось разобрать выписку',
 }
 
 export function errorText(e: unknown): string {

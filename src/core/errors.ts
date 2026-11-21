@@ -5,6 +5,7 @@ export type ErrorCode =
   | 'INVALID_FIELD' | 'CURRENCY_MISMATCH' | 'ACCOUNT_ARCHIVED' | 'OPENING_EXISTS' | 'OPENING_NOT_ADJUSTMENT'
   | 'NOT_FOUND' | 'FORBIDDEN' | 'DUPLICATE_KEY' | 'CURRENCY_LOCKED'
   | 'IMPORT_INVALID' | 'IMPORT_DUPLICATE' | 'IMPORT_BLOCKED' | 'INVALID_STATE' | 'IDENTIFIER_OVERLAP' | 'IDENTIFIER_INVALID_RANGE' | 'CRYPTO_UNAVAILABLE' | 'NO_RATE'
+  | 'STATEMENT_UNRECOGNIZED' | 'STATEMENT_PARSE'
 
 export class CoreError extends Error {
   constructor(public readonly code: ErrorCode, message: string, public readonly details?: Record<string, unknown>) {
