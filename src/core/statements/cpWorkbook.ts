@@ -8,7 +8,11 @@ export const CP_DIRECTORY_SHEET = 'Справочник'
 const KIND_RU: Record<string, string> = { shop: 'магазин', person: 'человек', organization: 'организация', own_account: 'свой счёт' }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const loadExcel = async (): Promise<any> => { const m: any = await import('exceljs'); return m.default ?? m }
+const loadExcel = async (): Promise<any> => {
+  try { const m: any = await import('exceljs'); return m.default ?? m } catch {
+    throw new Error('Не удалось загрузить модуль Excel. Закройте приложение полностью и откройте снова (возможно, вышла новая версия)')
+  }
+}
 
 /** Выгрузка: читает справочник и опознаёт контрагентов на конец периода выписки. */
 export async function buildCounterpartyWorkbook(ctx: CoreContext, st: ParsedStatement): Promise<Uint8Array> {

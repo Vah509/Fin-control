@@ -27,7 +27,6 @@ export interface CpFileResult { created: number; identifiersAdded: number; reass
 const nameKey = (s: string) => s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase()
 const collapse = (s: string) => s.normalize('NFKC').trim().replace(/\s+/g, ' ')
 const ibanKey = (iban: string) => normalizeIdentifier('account_number', iban)
-const needCrypto = (ctx: CoreContext) => ctx.crypto ?? fail('CRYPTO_UNAVAILABLE', 'ключи шифрования не загружены')
 const activeOn = (i: { validFrom: string; validTo: string | null }, d: string) => i.validFrom <= d && d <= (i.validTo ?? '9999-12-31')
 
 /** Уникальные контрагенты по всем счетам выписки (порядок первого появления). */
@@ -56,7 +55,7 @@ export async function recognizeGroups(ctx: CoreContext, groups: CpGroup[], date 
   for (const i of ids) if (i.kind === 'statement_name' && i.value) byName.set(nameKey(i.value), i.counterpartyId)
   const byHash = new Map<string, string>()
   for (const i of ids) if (i.kind === 'account_number' && i.valueHash) byHash.set(i.valueHash, i.counterpartyId)
-  const c = groups.some((g) => g.iban) ? needCrypto(ctx) : null
+  const c = ctx.crypto ?? null   // без ключей шифрования (пока так в приложении) опознание только по названию
   const out: (Counterparty | null)[] = []
   for (const g of groups) {
     let id: string | undefined
@@ -114,8 +113,7 @@ export async function applyCounterpartyFile(ctx: CoreContext, rows: CpFileRow[])
     fail('COUNTERPARTY_FILE_INVALID', shown + (errors.length > 5 ? ` (и ещё ${errors.length - 5})` : '') + '. Ничего не записано.', { errors })
   }
 
-  const hasIban = links.some((l) => l.row.iban)
-  const crypto = hasIban ? needCrypto(ctx) : null
+  const crypto = ctx.crypto ?? null   // без ключей IBAN-признаки не создаются, остаются названия
   const put: CounterpartyIdentifier[] = []
   const seen = new Set<string>()
   let added = 0, reassigned = 0

@@ -119,6 +119,13 @@ export interface ImportResult {
   rolledBackAt: string | null
 }
 export interface ImportReviewState { responses: ImportStoredResponse[]; decisions: ImportDecisions; result: ImportResult | null }
+export type StatementTaskStatus = 'active' | 'done' | 'deleted'
+/** Задача разбора выписки. payload: разобранная выписка без полных номеров (см. core/statementTasks.ts). */
+export interface StatementTask {
+  id: string; title: string; fileName: string; status: StatementTaskStatus
+  state: Json; payload: Json
+  createdBy: string | null; createdAt: string; updatedAt: string
+}
 export interface ImportJob {
   id: string; status: ImportJobStatus
   accounts: ImportJobAccount[]
@@ -148,6 +155,7 @@ export interface EntityMap {
   fxRates: FxRate
   fxSourcePriorities: FxSourcePriority
   importJobs: ImportJob
+  statementTasks: StatementTask
 }
 export type EntityName = keyof EntityMap
 
@@ -157,6 +165,6 @@ export const PRIMARY_KEY: { [K in EntityName]: keyof EntityMap[K] & string } = {
   institutions: 'id', projects: 'id', accounts: 'id', accountIdentifiers: 'id',
   tagGroups: 'id', tags: 'id', counterparties: 'id', counterpartyIdentifiers: 'id',
   transactions: 'id', checkpoints: 'id', periodLocks: 'id', fxRates: 'id',
-  fxSourcePriorities: 'source', importJobs: 'id',
+  fxSourcePriorities: 'source', importJobs: 'id', statementTasks: 'id',
 }
 export const ENTITY_NAMES = Object.keys(PRIMARY_KEY) as EntityName[]

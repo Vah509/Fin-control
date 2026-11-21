@@ -84,13 +84,17 @@ export const SPECS: { [K in EntityName]: Spec } = {
     f('contractVersion', 'contract_version', 'int'), f('review', 'review', 'json'), f('createdBy', 'created_by'),
     f('createdAt', 'created_at', 'ts'), f('updatedAt', 'updated_at', 'ts'),
   ] },
+  statementTasks: { table: 'statement_tasks', pk: 'id', fields: [
+    f('id', 'id'), f('title', 'title'), f('fileName', 'file_name'), f('status', 'status'), f('state', 'state', 'json'),
+    f('payload', 'payload', 'json'), f('createdBy', 'created_by'), f('createdAt', 'created_at', 'ts'), f('updatedAt', 'updated_at', 'ts'),
+  ] },
 }
 
 /** Порядок записи в пакете: родители раньше детей (тот же порядок в SQL-функции apply_batch). */
 export const WRITE_ORDER: EntityName[] = [
   'appSettings', 'planTypes', 'countries', 'currencies', 'institutions', 'projects', 'accounts', 'accountIdentifiers',
   'tagGroups', 'tags', 'counterparties', 'counterpartyIdentifiers', 'transactions', 'checkpoints', 'periodLocks',
-  'fxRates', 'fxSourcePriorities', 'importJobs',
+  'fxRates', 'fxSourcePriorities', 'importJobs', 'statementTasks',
 ]
 
 /** Откуда брать число знаков валюты. Заполняется слоем хранения. */

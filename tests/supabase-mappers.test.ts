@@ -79,4 +79,12 @@ describe('слой Supabase: преобразование колонок', () =>
     expect(r['contract_version']).toBe(1)
     expect(fromRow('importJobs', r, env)).toEqual(job)
   })
+
+  it('statementTasks: имена колонок', () => {
+    const task = { id: 't', title: 'x', fileName: 'a.pdf', status: 'active' as const, state: { counterpartiesLoaded: true }, payload: { bank: 'slsp' },
+      createdBy: null, createdAt: '2026-11-21T10:00:00.000Z', updatedAt: '2026-11-21T10:00:00.000Z' }
+    const r = toRow('statementTasks', task, env)
+    expect(r['file_name']).toBe('a.pdf')
+    expect(fromRow('statementTasks', r, env)).toEqual(task)
+  })
 })
