@@ -60,18 +60,18 @@ describe('задачи выписок', () => {
     const task = await createStatementTask(ctx, stmt(), 'a.pdf')
     await expect(finishStatementTask(ctx, task.id)).rejects.toThrow(/сначала нажмите/)
     const item = { transactionId: 't1', accountKey: '0255', accountName: 'SPACE', date: '2026-09-05', amountMinor: -777, currency: 'EUR', type: 'expense', counterparty: null, comment: null }
-    await saveComparison(ctx, task.id, { problems: [{ kind: 'db_only', transactionId: 't1', details: { ...item } }], inDb: {}, dbOnly: [item], missingAccounts: [] })
-    await saveComparison(ctx, task.id, { problems: [{ kind: 'db_only', transactionId: 't1', details: { ...item } }], inDb: {}, dbOnly: [item], missingAccounts: [] })   // повтор не плодит дубли
+    await saveComparison(ctx, task.id, { problems: [{ kind: 'db_only', transactionId: 't1', details: { ...item } }], inDb: {}, dbOnly: [item], missingAccounts: [], plain: [] })
+    await saveComparison(ctx, task.id, { problems: [{ kind: 'db_only', transactionId: 't1', details: { ...item } }], inDb: {}, dbOnly: [item], missingAccounts: [], plain: [] })   // повтор не плодит дубли
     expect(await listTaskProblems(ctx, task.id)).toHaveLength(1)
     expect((await listStatementTasks(ctx))[0]!.state).toMatchObject({ problemsCount: 1, operationsFileDownloaded: true })
     await expect(finishStatementTask(ctx, task.id)).rejects.toThrow(/нерешённые/)
-    await saveComparison(ctx, task.id, { problems: [], inDb: {}, dbOnly: [], missingAccounts: [] })
+    await saveComparison(ctx, task.id, { problems: [], inDb: {}, dbOnly: [], missingAccounts: [], plain: [] })
     expect(await listTaskProblems(ctx, task.id)).toHaveLength(0)
     // счёта выписки нет в базе: при «Готово» сравнение повторяется, это проблема, запись не идёт
     await expect(finishStatementTask(ctx, task.id)).rejects.toThrow(/нерешённые/)
     expect((await listTaskProblems(ctx, task.id)).map((p) => p.kind)).toEqual(['account_missing'])
     expect(await storage.listTransactions({})).toHaveLength(0)
-    await saveComparison(ctx, task.id, { problems: [{ kind: 'db_only', transactionId: 't1', details: { ...item } }], inDb: {}, dbOnly: [item], missingAccounts: [] })
+    await saveComparison(ctx, task.id, { problems: [{ kind: 'db_only', transactionId: 't1', details: { ...item } }], inDb: {}, dbOnly: [item], missingAccounts: [], plain: [] })
     await deleteStatementTask(ctx, task.id)
     expect(await storage.list('statementProblems')).toHaveLength(0)
   })

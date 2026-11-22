@@ -92,3 +92,28 @@ export async function revealAccountIdentifier(ctx: CoreContext, id: string): Pro
   })
   return plain
 }
+
+/**
+ * Признак «номер счёта» по последним 4 цифрам, без ключей шифрования (решение владельца 22.11.2026: в приложении ключей нет).
+ * Хэш считается SHA-256 от «last4:account_number:цифры:id счёта» (уникален для счёта), в шифр-поле лежит те же 4 цифры (base64, не секрет).
+ * Полного номера нет, поэтому просмотр номера и поиск по полному номеру для такого признака не работают.
+ */
+export async function addAccountLast4(ctx: CoreContext, accountId: string, last4: string, validFrom?: string): Promise<AccountIdentifier> {
+  if (!ctx.actor.isOwner) fail('FORBIDDEN', 'признаки добавляет только владелец')
+  if (!/^[A-Za-z0-9]{4}$/.test(last4)) fail('INVALID_FIELD', 'нужны ровно 4 последние цифры номера')
+  const acc = (await ctx.storage.list('accounts')).find((a) => a.id === accountId) ?? fail('NOT_FOUND', 'счёт не найден')
+  const from = assertDate(validFrom ?? '1970-01-01', 'начало действия')
+  const norm = last4.toLowerCase()
+  const dup = (await ctx.storage.listAccountIdentifiers({ accountId })).find((i) => i.kind === 'account_number' && i.last4 === norm && !i.validTo)
+  if (dup) fail('IDENTIFIER_OVERLAP', 'такой признак у счёта уже есть')
+  const digest = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(`last4:account_number:${norm}:${acc.id}`)))
+  const row: AccountIdentifier = {
+    id: ctx.newId(), accountId, kind: 'account_number', valueHash: [...digest].map((b) => b.toString(16).padStart(2, '0')).join(''),
+    valueEnc: btoa(norm), last4: norm, validFrom: from, validTo: null,
+  }
+  await ctx.storage.applyBatch({
+    put: { accountIdentifiers: [row] },
+    audit: [auditEntry(ctx, 'identifier_added', { tableName: 'account_identifiers', recordId: row.id, details: { accountId, kind: 'account_number', last4: norm, validFrom: from, withoutCrypto: true } })],
+  })
+  return row
+}

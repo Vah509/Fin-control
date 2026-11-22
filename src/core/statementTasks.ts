@@ -5,7 +5,7 @@ import type { Json, StatementTask } from '../data/types'
 import { auditEntry } from './audit'
 import type { CoreContext } from './context'
 import { fail } from './errors'
-import type { ParsedStatement } from './statements/types'
+import type { ParsedStatement, StatementDecisions } from './statements/types'
 
 export interface CpTotals { rows: number; created: number; identifiersAdded: number; reassigned: number }
 export interface StatementTaskState {
@@ -16,6 +16,8 @@ export interface StatementTaskState {
   operationsFileDownloaded?: boolean; comparedAt?: string; problemsCount?: number; missingAccounts?: string[]
   /** «Готово»: сколько операций записано в базу и когда */
   writtenCount?: number; writtenAt?: string
+  /** решения по проблемам (см. StatementDecisions) */
+  decisions?: StatementDecisions
 }
 
 const IBAN_RE = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,6}(?:\s?[A-Z0-9]{1,4})?\b/g

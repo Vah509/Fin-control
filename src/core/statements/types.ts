@@ -67,3 +67,15 @@ export interface Reconciliation {
   withdrawalsExpectedMinor: number
   withdrawalsComputedMinor: number
 }
+
+/** Решения владельца по проблемам задачи (хранятся в state задачи). Сравнение учитывает их при каждом пересчёте. */
+export interface StatementDecisions {
+  /** db_only «оставить»: id операций базы */
+  keepDb?: string[]
+  /** amount_mismatch «оставить базу»: строка выписки n счёта a считается совпавшей с операцией tx */
+  keepBase?: { a: string; n: number; tx: string }[]
+  /** amount_mismatch «разные операции»: эту пару не связывать */
+  distinct?: { a: string; n: number; tx: string }[]
+  /** transfer_unpaired «обычный расход/приход»: строка пишется без пары */
+  plain?: { a: string; n: number }[]
+}

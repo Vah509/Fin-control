@@ -1,7 +1,7 @@
 // Запись операций выписки в базу (кнопка «Готово», только когда нет проблем). Строки, которых уже есть в базе (по сравнению), не пишутся.
 // Время в базе: 12:00 по поясу счёта плюс номер строки в секундах (порядок внутри дня; во времени смысла нет, решение владельца).
 // Перевод на свой счёт: две записи (эта сторона и парная на счёте-получателе) с общим transfer_id; в других случаях это проблема и запись не идёт.
-import type { Account, Transaction, TransactionType } from '../../data/types'
+import type { Account, Country, Transaction, TransactionType } from '../../data/types'
 import type { CoreContext } from '../context'
 import { fail } from '../errors'
 import { assertUnlocked } from '../locks'
@@ -12,6 +12,11 @@ import { cmpKey, findDbAccount, pairTarget, rowCounterparties, type Comparison }
 import type { ParsedStatement } from './types'
 
 const HOUR = 3_600_000
+
+/** Момент записи операции выписки: 12:00 по поясу счёта плюс номер строки в секундах. */
+export function statementBookedAt(acc: Account, date: string, n: number, countries: Country[], settings: ReturnType<typeof readSettings>): string {
+  return iso(startOfLocalDayMs(date, resolveTimeZone(acc, countries, settings)) + 12 * HOUR + n * 1000)
+}
 
 /** Операции к записи по выписке и сравнению (без проблем). Проверяет форму и закрытые периоды (по одному разу на счёт). */
 export async function buildStatementTransactions(ctx: CoreContext, st: ParsedStatement, cmp: Comparison): Promise<Transaction[]> {
@@ -26,7 +31,7 @@ export async function buildStatementTransactions(ctx: CoreContext, st: ParsedSta
   const out: Transaction[] = []
   const earliest = new Map<string, { acc: Account; at: string }>()
   const mk = (acc: Account, date: string, n: number, type: TransactionType, amountMinor: number, counterpartyId: string | null, transferId: string | null, description: string): Transaction => {
-    const bookedAt = iso(startOfLocalDayMs(date, resolveTimeZone(acc, countries, settings)) + 12 * HOUR + n * 1000)
+    const bookedAt = statementBookedAt(acc, date, n, countries, settings)
     const e = earliest.get(acc.id)
     if (!e || bookedAt < e.at) earliest.set(acc.id, { acc, at: bookedAt })
     const t: Transaction = {
@@ -44,7 +49,8 @@ export async function buildStatementTransactions(ctx: CoreContext, st: ParsedSta
     for (const r of a.rows) {
       if (!cmp.inDb[cmpKey(a.key, r.n, 'operation')]) {
         const cp = cpOf(r.counterparty)
-        const pt = pairTarget(accounts, cp, dbAcc)
+        const plain = cmp.plain.includes(cmpKey(a.key, r.n, 'operation'))
+        const pt = plain ? null : pairTarget(accounts, cp, dbAcc)
         if (pt && !pt.ok) fail('INVALID_FIELD', `строка ${r.n}: ${pt.reason}`)
         if (pt?.ok) {
           const transferId = ctx.newId()

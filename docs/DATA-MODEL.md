@@ -28,6 +28,8 @@
 
 Нет совсем (ждут пункт 6 `docs/CURRENT-TASK.md`): `imports`, `import_rows`, `period_summaries`, внешние ключи `import_id` и `transfer_id` (нужны в шаге 5).
 
+Миграция `20261122200000_iteration11_problem_kinds2.sql`: проверка `statement_problems.kind` допускает ещё `amount_mismatch` и `date_mismatch` (ветка `statement-xlsx`).
+
 ## Функции и триггеры в базе
 
 Миграция `20261107100100_iteration2_storage_only.sql` (7б) убирает бизнес-логику итерации 1 из базы. **После всей цепочки на чистой базе остаются:**

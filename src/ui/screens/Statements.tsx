@@ -1,9 +1,9 @@
 // Выписки: список задач, новая загрузка (шаг 1), страница задачи (шаги 2 и далее). Задачи хранятся в базе.
 import { useState } from 'react'
-import { createStatementTask, deleteStatementTask, finishStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, saveComparison, taskStatement, updateTaskState } from '../../core'
-import type { ProblemDetails } from '../../core'
+import { compareTask, createStatementTask, deleteStatementTask, finishStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, resolveProblem, saveComparison, taskStatement, updateTaskState } from '../../core'
+import type { ProblemAction, ProblemDetails } from '../../core'
 import {
-  applyCounterpartyFile, buildCounterpartyWorkbook, buildOperationsWorkbook, compareWithDb, extractPdfPages, operationsFileName, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
+  applyCounterpartyFile, buildCounterpartyWorkbook, buildOperationsWorkbook, extractPdfPages, operationsFileName, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
 } from '../../core/statements'
 import type { StatementTaskState } from '../../core'
 import type { StatementTask } from '../../data/types'
@@ -113,28 +113,74 @@ export function StatementTaskScreen({ taskId }: { taskId: string }) {
   )
 }
 
-const KIND_RU: Record<string, string> = { db_only: 'Есть в базе, нет в выписке', account_missing: 'Счёт не найден в базе', transfer_unpaired: 'Перевод без пары' }
+const KIND_RU: Record<string, string> = {
+  db_only: 'Есть в базе, нет в выписке', account_missing: 'Счёт не найден в базе', transfer_unpaired: 'Перевод без пары',
+  amount_mismatch: 'Сумма расходится', date_mismatch: 'Дата расходится',
+}
+const HELP: Record<string, string> = {
+  db_only: 'Операция есть в базе за период выписки, но в выписке её нет.',
+  amount_mismatch: 'В базе найдена операция того же контрагента (±3 дня), сумма другая.',
+  account_missing: 'Выписка относится к счёту, которого нет в базе (или у него нет признака «последние 4 цифры»).',
+  transfer_unpaired: 'Перевод на свой счёт, парную запись создать нельзя.',
+  date_mismatch: 'Нужна доработка: в базе есть операция с той же суммой, но датой в пределах 3 дней. Решения пока нет, «Готово» заблокировано.',
+}
 
 export function StatementProblemsScreen({ taskId }: { taskId: string }) {
-  const { ctx } = useApp()
+  const { ctx, bump } = useApp()
   const list = useLoad(() => listTaskProblems(ctx, taskId), [taskId])
+  const accounts = useLoad(() => ctx.storage.list('accounts'), [])
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<Msg>(null)
+  const [pick, setPick] = useState<Record<string, string>>({})
+
+  async function act(id: string, action: ProblemAction, ask?: string) {
+    if (ask && !window.confirm(ask)) return
+    setBusy(true); setMsg(null)
+    try { await resolveProblem(ctx, taskId, id, action); bump(); list.reload(); setMsg({ kind: 'ok', text: 'Готово. Список пересчитан.' }) }
+    catch (e) { setMsg({ kind: 'error', text: errorText(e) }); list.reload() } finally { setBusy(false) }
+  }
+  const B = ({ id, action, label, ask }: { id: string; action: ProblemAction; label: string; ask?: string }) => (
+    <button className="btn" disabled={busy} onClick={() => void act(id, action, ask)}>{label}</button>
+  )
+
   return (
     <Screen title="Проблемы выписки" back={<BackButton to="statementTask" label="Загрузка" />}>
       {list.loading && <Loading />}
       {list.error && <ErrorBox text={list.error} onRetry={list.reload} />}
-      {list.data && list.data.length === 0 && <p className="muted">Проблем нет.</p>}
+      {msg && <Notice kind={msg.kind === 'ok' ? 'ok' : 'warn'}>{msg.text}</Notice>}
+      {list.data && list.data.length === 0 && <p className="muted">Проблем нет. Вернитесь на страницу загрузки и нажмите «Готово».</p>}
       {list.data && list.data.length > 0 && (
         <>
-          <p className="muted">Пока есть проблемы, выписка в базу не записывается. Экрана решения проблем ещё нет: они только фиксируются. После пересчёта (шаг 3 на странице задачи) список обновится.</p>
+          <p className="muted">Пока есть проблемы, выписка в базу не записывается. Решённая проблема исчезает из списка.</p>
           <ul className="plain rows">
             {list.data.map((p) => {
               const d = p.details as unknown as ProblemDetails
+              const cands = (accounts.data ?? []).filter((x) => !x.archivedAt && x.currencyKey.toUpperCase() === (d.currency ?? '').toUpperCase())
               return (
-                <li key={p.id} className="row">
-                  <div className="row-main grow">
-                    <span className="row-title">{KIND_RU[p.kind]}{d.date ? ` · ${dateRu(d.date)}` : ''}{d.amountMinor !== null ? ` · ${formatMinor(d.amountMinor, 2)} ${d.currency ?? ''}` : ''}</span>
-                    <span className="row-sub">…{d.accountKey} {d.accountName}{d.n ? ` · строка ${d.n}` : ''}{d.type ? ` · ${d.type}` : ''}{d.counterparty ? ` · ${d.counterparty}` : ''}{d.comment ? ` · ${d.comment}` : ''}{d.message ? ` · ${d.message}` : ''}</span>
-                  </div>
+                <li key={p.id} className="card">
+                  <p><b>{KIND_RU[p.kind] ?? p.kind}</b>{d.date ? ` · ${dateRu(d.date)}` : ''}{d.amountMinor !== null ? ` · ${formatMinor(d.amountMinor, 2)} ${d.currency ?? ''}` : ''}</p>
+                  <p className="muted">…{d.accountKey} {d.accountName}{d.n ? ` · строка ${d.n}` : ''}{d.counterparty ? ` · ${d.counterparty}` : ''}{d.comment ? ` · ${d.comment}` : ''}</p>
+                  {d.dbAmountMinor !== undefined && <p className="muted">В базе: {formatMinor(d.dbAmountMinor, 2)} {d.currency}{d.dbDate ? ` · ${dateRu(d.dbDate)}` : ''}</p>}
+                  {d.message && <p className="muted">{d.message}</p>}
+                  <p className="muted">{HELP[p.kind] ?? 'Нужна доработка: решения для этого вида проблем пока нет.'}</p>
+                  {p.kind === 'db_only' && (<>
+                    <B id={p.id} action={{ kind: 'keep' }} label="Оставить" />
+                    <B id={p.id} action={{ kind: 'delete' }} label="Удалить из базы" ask="Операция будет помечена удалённой (парная запись перевода тоже). Продолжить?" />
+                  </>)}
+                  {p.kind === 'amount_mismatch' && (<>
+                    <B id={p.id} action={{ kind: 'accept_statement' }} label="Принять сумму выписки" ask="Сумма и дата операции в базе будут заменены данными выписки. Продолжить?" />
+                    <B id={p.id} action={{ kind: 'keep_base' }} label="Оставить как в базе" />
+                    <B id={p.id} action={{ kind: 'distinct' }} label="Это разные операции" />
+                  </>)}
+                  {p.kind === 'transfer_unpaired' && <B id={p.id} action={{ kind: 'plain' }} label="Записать как обычный расход/приход" />}
+                  {p.kind === 'account_missing' && (<>
+                    <select value={pick[p.id] ?? ''} disabled={busy} onChange={(e) => setPick({ ...pick, [p.id]: e.target.value })}>
+                      <option value="">Выберите счёт ({d.currency})</option>
+                      {cands.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                    </select>
+                    <button className="btn" disabled={busy || !pick[p.id]} onClick={() => void act(p.id, { kind: 'add_identifier', accountId: pick[p.id]! }, `Добавить счёту признак «последние 4 цифры …${d.accountKey}»?`)}>Добавить признак …{d.accountKey}</button>
+                    <p className="muted">Нужного счёта нет: создайте его в «Счета → Новый счёт», затем вернитесь сюда.</p>
+                  </>)}
                 </li>
               )
             })}
@@ -173,11 +219,11 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
   })
   const downloadOps = () => run(async () => {
     const name = operationsFileName(st)
-    const cmp = await compareWithDb(ctx, st)
+    const cmp = await compareTask(ctx, task.id)
     await saveComparison(ctx, task.id, cmp)
     await saveFile(name, await buildOperationsWorkbook(ctx, st, cmp), XLSX)
     bump()
-    return `Файл создан: ${name}. Проблем: ${cmp.dbOnly.length}.`
+    return `Файл создан: ${name}. Проблем: ${cmp.problems.length}.`
   })
   const finish = () => run(async () => { const r = await finishStatementTask(ctx, task.id); bump(); return `Записано операций в базу: ${r.written}. Задача закрыта.` })
   async function remove() {
