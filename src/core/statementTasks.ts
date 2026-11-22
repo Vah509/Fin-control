@@ -14,6 +14,8 @@ export interface StatementTaskState {
   counterpartiesFile?: string; counterpartiesAt?: string; counterpartiesTotals?: CpTotals
   /** шаг 3: файл скачан, время сравнения с базой, число проблем, счета без пары в базе */
   operationsFileDownloaded?: boolean; comparedAt?: string; problemsCount?: number; missingAccounts?: string[]
+  /** «Готово»: сколько операций записано в базу и когда */
+  writtenCount?: number; writtenAt?: string
 }
 
 const IBAN_RE = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,6}(?:\s?[A-Z0-9]{1,4})?\b/g

@@ -113,6 +113,8 @@ export function StatementTaskScreen({ taskId }: { taskId: string }) {
   )
 }
 
+const KIND_RU: Record<string, string> = { db_only: 'Есть в базе, нет в выписке', account_missing: 'Счёт не найден в базе', transfer_unpaired: 'Перевод без пары' }
+
 export function StatementProblemsScreen({ taskId }: { taskId: string }) {
   const { ctx } = useApp()
   const list = useLoad(() => listTaskProblems(ctx, taskId), [taskId])
@@ -123,15 +125,15 @@ export function StatementProblemsScreen({ taskId }: { taskId: string }) {
       {list.data && list.data.length === 0 && <p className="muted">Проблем нет.</p>}
       {list.data && list.data.length > 0 && (
         <>
-          <p className="muted">Операции, которые есть в базе, но их нет в выписке. Решения пока нет: проблемы только фиксируются. После пересчёта (шаг 3 на странице задачи) список обновится.</p>
+          <p className="muted">Пока есть проблемы, выписка в базу не записывается. Экрана решения проблем ещё нет: они только фиксируются. После пересчёта (шаг 3 на странице задачи) список обновится.</p>
           <ul className="plain rows">
             {list.data.map((p) => {
               const d = p.details as unknown as ProblemDetails
               return (
                 <li key={p.id} className="row">
                   <div className="row-main grow">
-                    <span className="row-title">{dateRu(d.date)} · {formatMinor(d.amountMinor, 2)} {d.currency}</span>
-                    <span className="row-sub">…{d.accountKey} {d.accountName} · {d.type}{d.counterparty ? ` · ${d.counterparty}` : ''}{d.comment ? ` · ${d.comment}` : ''}</span>
+                    <span className="row-title">{KIND_RU[p.kind]}{d.date ? ` · ${dateRu(d.date)}` : ''}{d.amountMinor !== null ? ` · ${formatMinor(d.amountMinor, 2)} ${d.currency ?? ''}` : ''}</span>
+                    <span className="row-sub">…{d.accountKey} {d.accountName}{d.n ? ` · строка ${d.n}` : ''}{d.type ? ` · ${d.type}` : ''}{d.counterparty ? ` · ${d.counterparty}` : ''}{d.comment ? ` · ${d.comment}` : ''}{d.message ? ` · ${d.message}` : ''}</span>
                   </div>
                 </li>
               )
@@ -177,7 +179,7 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
     bump()
     return `Файл создан: ${name}. Проблем: ${cmp.dbOnly.length}.`
   })
-  const finish = () => run(async () => { await finishStatementTask(ctx, task.id); bump(); return 'Задача закрыта. В базу движения пока не записывались.' })
+  const finish = () => run(async () => { const r = await finishStatementTask(ctx, task.id); bump(); return `Записано операций в базу: ${r.written}. Задача закрыта.` })
   async function remove() {
     if (!window.confirm('Удалить загрузку? Разобранные данные будут стёрты. Уже записанные контрагенты останутся.')) return
     setBusy(true)
@@ -222,13 +224,13 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
         {!state.counterpartiesLoaded && <p className="muted">Станет доступен после шага 2.</p>}
         {state.counterpartiesLoaded && (
           <>
-            <p className="muted">Приложение сравнит выписку с операциями в базе за период выписки. Нормально: операции нет в базе (будет записана) или она есть и там и там. Проблема: операция есть в базе, а в выписке нет. В файле плюсы в колонках «В выписке» и «В базе».</p>
+            <p className="muted">Приложение сравнит выписку с операциями в базе за период выписки. Нормально: операции нет в базе (будет записана) или она есть и там и там. Проблемы (запись блокируется, пока их нет): операция есть в базе, а в выписке нет; счёта выписки нет в базе; перевод на свой счёт, для которого нельзя создать пару (другая валюта, счёт не привязан). Кнопка «Готово» записывает новые операции в базу одним пакетом. В файле плюсы в колонках «В выписке» и «В базе».</p>
             {state.comparedAt && (state.missingAccounts?.length ?? 0) > 0 && (
               <Notice kind="warn">Нет в базе (или признак счёта неоднозначен): …{state.missingAccounts!.join(', …')}. По ним сравнения не было, «В базе» пусто.</Notice>
             )}
-            {state.comparedAt && !state.operationsDone && (state.problemsCount ?? 0) === 0 && <Notice kind="ok">Проблем нет. Можно нажать «Готово».</Notice>}
+            {state.comparedAt && !state.operationsDone && (state.problemsCount ?? 0) === 0 && <Notice kind="ok">Проблем нет. «Готово» запишет в базу новые операции выписки.</Notice>}
             {state.comparedAt && !state.operationsDone && (state.problemsCount ?? 0) > 0 && <Notice kind="warn">Проблем: {state.problemsCount}. Откройте «Проблемы».</Notice>}
-            {state.operationsDone && <Notice kind="ok">Задача закрыта.</Notice>}
+            {state.operationsDone && <Notice kind="ok">Задача закрыта{state.writtenCount !== undefined ? `, записано операций: ${state.writtenCount}` : ''}.</Notice>}
             <button className="btn primary" disabled={busy} onClick={() => void downloadOps()}>{state.comparedAt ? 'Сравнить и скачать файл ещё раз' : 'Сравнить с базой и скачать файл'}</button>
             {!state.operationsDone && state.comparedAt && (state.problemsCount ?? 0) > 0 && (
               <button className="btn" disabled={busy} onClick={() => go('statementProblems', { accountId: task.id })}>Проблемы ({state.problemsCount})</button>

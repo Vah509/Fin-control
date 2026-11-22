@@ -126,8 +126,8 @@ export interface StatementTask {
   state: Json; payload: Json
   createdBy: string | null; createdAt: string; updatedAt: string
 }
-/** Проблема сравнения выписки с базой (привязана к задаче). kind: db_only = операция есть в базе, в выписке нет. details: данные для показа. */
-export type StatementProblemKind = 'db_only'
+/** Проблема сравнения выписки с базой (привязана к задаче). kind: db_only = операция есть в базе, в выписке нет; account_missing = счёта выписки нет в базе; transfer_unpaired = перевод на свой счёт без возможности создать пару. details: данные для показа. */
+export type StatementProblemKind = 'db_only' | 'account_missing' | 'transfer_unpaired'
 export interface StatementProblem {
   id: string; taskId: string; kind: StatementProblemKind; status: 'open' | 'resolved'
   transactionId: string | null; details: Json; createdAt: string

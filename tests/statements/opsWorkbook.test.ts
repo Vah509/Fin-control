@@ -44,13 +44,13 @@ describe('файл «Операции + Сверка»', () => {
     ])
     const wb = await load(await buildOperationsWorkbook(ctx, stmt()))
     const ws = wb.getWorksheet(OPS_SHEET)
-    expect(ws.getRow(1).values.slice(1)).toEqual(['№', 'Дата', 'Счёт', 'Контрагент', 'Сумма', 'Валюта', 'Остаток после', 'Описание из выписки', 'В выписке', 'В базе'])
+    expect(ws.getRow(1).values.slice(1)).toEqual(['В выписке', 'В базе', '№', 'Дата', 'Счёт', 'Контрагент', 'Сумма', 'Валюта', 'Остаток после', 'Описание из выписки'])
     expect(ws.rowCount).toBe(4)
     const r1 = ws.getRow(2)
-    expect([r1.getCell(1).value, r1.getCell(4).value, r1.getCell(5).value, r1.getCell(6).value, r1.getCell(7).value, r1.getCell(9).value, r1.getCell(10).value]).toEqual([1, 'Lidl', -10, 'EUR', 990, '+', ''])
-    expect(ws.getRow(3).getCell(4).value).toBe('Lidl')
-    expect(ws.getRow(4).getCell(4).value).toBe('Test Sender') // не опознан: текст из выписки
-    expect(String(r1.getCell(8).value)).toContain('Lidl dakuje 165')
+    expect([r1.getCell(1).value, r1.getCell(2).value, r1.getCell(3).value, r1.getCell(6).value, r1.getCell(7).value, r1.getCell(8).value, r1.getCell(9).value]).toEqual(['+', '', 1, 'Lidl', -10, 'EUR', 990])
+    expect(ws.getRow(3).getCell(6).value).toBe('Lidl')
+    expect(ws.getRow(4).getCell(6).value).toBe('Test Sender') // не опознан: текст из выписки
+    expect(String(r1.getCell(10).value)).toContain('Lidl dakuje 165')
     expect(wb.getWorksheet(RECON_SHEET).getRow(2).getCell(14).value).toBe('ОК')
     expect(ws.getRow(2).getCell(1).fill?.fgColor?.argb).toBeUndefined()
   })
@@ -64,9 +64,9 @@ describe('файл «Операции + Сверка»', () => {
     a.closingMinor -= 50; a.withdrawalsMinor += 50
     const ws = (await load(await buildOperationsWorkbook(ctx, st))).getWorksheet(OPS_SHEET)
     expect(ws.rowCount).toBe(5)
-    expect([ws.getRow(2).getCell(5).value, ws.getRow(2).getCell(7).value]).toEqual([-10, 990])
-    expect([ws.getRow(3).getCell(1).value, ws.getRow(3).getCell(4).value, ws.getRow(3).getCell(5).value, ws.getRow(3).getCell(7).value]).toEqual([1, 'Комиссия банка', -0.5, 989.5])
-    expect(ws.getRow(4).getCell(1).value).toBe(2)
+    expect([ws.getRow(2).getCell(7).value, ws.getRow(2).getCell(9).value]).toEqual([-10, 990])
+    expect([ws.getRow(3).getCell(3).value, ws.getRow(3).getCell(6).value, ws.getRow(3).getCell(7).value, ws.getRow(3).getCell(9).value]).toEqual([1, 'Комиссия банка', -0.5, 989.5])
+    expect(ws.getRow(4).getCell(3).value).toBe(2)
   })
 
   it('расхождение: строка красным, «НЕ СОШЛОСЬ» с номером строки', async () => {
@@ -131,9 +131,9 @@ describe('сравнение выписки с базой', () => {
     const st = stmt()
     const ws = (await load(await buildOperationsWorkbook(ctx, st, await compareWithDb(ctx, st)))).getWorksheet(OPS_SHEET)
     expect(ws.rowCount).toBe(5)
-    expect([ws.getRow(2).getCell(10).value, ws.getRow(3).getCell(10).value]).toEqual(['+', ''])
+    expect([ws.getRow(2).getCell(2).value, ws.getRow(3).getCell(2).value]).toEqual(['+', ''])
     const last = ws.getRow(5)
-    expect([last.getCell(1).value, last.getCell(5).value, last.getCell(9).value, last.getCell(10).value]).toEqual(['', -7.77, '', '+'])
+    expect([last.getCell(1).value, last.getCell(2).value, last.getCell(3).value, last.getCell(7).value]).toEqual(['', '+', '', -7.77])
     expect(last.getCell(1).fill.fgColor.argb).toBe('FFFFF2CC')
   })
 

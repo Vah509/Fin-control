@@ -7,7 +7,7 @@ import type { ParsedStatement } from './types'
 
 export const OPS_SHEET = 'Операции'
 export const RECON_SHEET = 'Сверка'
-export const OPS_HEADERS = ['№', 'Дата', 'Счёт', 'Контрагент', 'Сумма', 'Валюта', 'Остаток после', 'Описание из выписки', 'В выписке', 'В базе']
+export const OPS_HEADERS = ['В выписке', 'В базе', '№', 'Дата', 'Счёт', 'Контрагент', 'Сумма', 'Валюта', 'Остаток после', 'Описание из выписки']
 export const FEE_NAME = 'Комиссия банка'
 export const RECON_HEADERS = ['Счёт', 'Название', 'Валюта', 'Период с', 'Период по', 'Начальный остаток', 'Вклады (выписка)', 'Вклады (расчёт)', 'Выборы (выписка)', 'Выборы (расчёт)', 'Конечный остаток (выписка)', 'Конечный остаток (расчёт)', 'Строк', 'Результат']
 const RED = 'FFFFC7CE'
@@ -40,7 +40,7 @@ export async function buildOperationsWorkbook(ctx: CoreContext, st: ParsedStatem
 
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet(OPS_SHEET)
-  ws.columns = OPS_HEADERS.map((header, i) => ({ header, width: [6, 12, 8, 32, 14, 9, 16, 70, 11, 9][i] }))
+  ws.columns = OPS_HEADERS.map((header, i) => ({ header, width: [11, 9, 6, 12, 8, 32, 14, 9, 16, 70][i] }))
   const rs = wb.addWorksheet(RECON_SHEET)
   rs.columns = RECON_HEADERS.map((header, i) => ({ header, width: i === 1 ? 28 : i === 13 ? 34 : 16 }))
 
@@ -50,9 +50,9 @@ export async function buildOperationsWorkbook(ctx: CoreContext, st: ParsedStatem
     const fill = (row: { eachCell: (o: { includeEmpty: boolean }, f: (c: { fill: unknown }) => void) => void }, argb: string) =>
       row.eachCell({ includeEmpty: true }, (cell) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } } })
     const add = (n: number, r: { bookingDate: string; accountKey: string; currency: string }, cp: string, amount: number, after: number, desc: string, inDb: boolean, isBad: boolean) => {
-      const row = ws.addRow([n, isoDate(r.bookingDate), r.accountKey, cp, money(amount), r.currency, money(after), desc, '+', inDb ? '+' : ''])
-      row.getCell(2).numFmt = 'DD.MM.YYYY'
-      for (const c of [5, 7]) row.getCell(c).numFmt = '#,##0.00'
+      const row = ws.addRow(['+', inDb ? '+' : '', n, isoDate(r.bookingDate), r.accountKey, cp, money(amount), r.currency, money(after), desc])
+      row.getCell(4).numFmt = 'DD.MM.YYYY'
+      for (const c of [7, 9]) row.getCell(c).numFmt = '#,##0.00'
       if (isBad) fill(row, RED)
     }
     for (const r of acc.rows) {
@@ -70,8 +70,8 @@ export async function buildOperationsWorkbook(ctx: CoreContext, st: ParsedStatem
     if (!rec.ok) fill(rr, RED)
   }
   for (const d of cmp?.dbOnly ?? []) {
-    const row = ws.addRow(['', isoDate(d.date), d.accountKey, d.counterparty ?? '', money(d.amountMinor), d.currency, '', d.comment ? `Только в базе (${d.type}): ${d.comment}` : `Только в базе (${d.type})`, '', '+'])
-    row.getCell(2).numFmt = 'DD.MM.YYYY'; row.getCell(5).numFmt = '#,##0.00'
+    const row = ws.addRow(['', '+', '', isoDate(d.date), d.accountKey, d.counterparty ?? '', money(d.amountMinor), d.currency, '', d.comment ? `Только в базе (${d.type}): ${d.comment}` : `Только в базе (${d.type})`])
+    row.getCell(4).numFmt = 'DD.MM.YYYY'; row.getCell(7).numFmt = '#,##0.00'
     row.eachCell({ includeEmpty: true }, (cell: { fill: unknown }) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: YELLOW } } })
   }
   for (const w of [ws, rs]) { w.getRow(1).font = { bold: true }; w.views = [{ state: 'frozen', ySplit: 1 }] }

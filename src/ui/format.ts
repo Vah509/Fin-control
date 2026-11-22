@@ -31,6 +31,7 @@ const ERR: Record<ErrorCode, string> = {
   STATEMENT_UNRECOGNIZED: 'Файл не похож на выписку этого банка',
   STATEMENT_PARSE: 'Не удалось разобрать выписку',
   COUNTERPARTY_FILE_INVALID: 'Файл контрагентов не принят',
+  RECONCILE_FAILED: 'Сверка выписки не сошлась',
 }
 
 export function errorText(e: unknown): string {
