@@ -9,6 +9,8 @@ import type { ParsedStatement, StatementDecisions } from './statements/types'
 
 export interface CpTotals { rows: number; created: number; identifiersAdded: number; reassigned: number }
 export interface StatementTaskState {
+  /** шаг 2 (с 0.2.23): счета выписки опознаны, «Следующий шаг» нажат */
+  accountsConfirmed?: boolean
   counterpartiesLoaded?: boolean; counterpartyFileDownloaded?: boolean; operationsDone?: boolean
   /** шаг 2: имя последнего загруженного файла, время и накопленный итог (повторная загрузка не стирает результат) */
   counterpartiesFile?: string; counterpartiesAt?: string; counterpartiesTotals?: CpTotals

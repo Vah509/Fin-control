@@ -11,7 +11,7 @@ import { Home } from './ui/screens/Home'
 import { SnapshotScreen } from './ui/screens/Snapshot'
 import { BalanceScreen } from './ui/screens/Balance'
 import { MovesScreen } from './ui/screens/Moves'
-import { StatementNewScreen, StatementProblemsScreen, StatementsScreen, StatementTaskScreen } from './ui/screens/Statements'
+import { StatementAccountScreen, StatementNewScreen, StatementProblemsScreen, StatementsScreen, StatementTaskScreen } from './ui/screens/Statements'
 import { AccountsScreen } from './ui/screens/Accounts'
 import { MoreScreen } from './ui/screens/More'
 import { PeriodsScreen } from './ui/screens/Periods'
@@ -36,7 +36,7 @@ const TABS: { page: Page; label: string; icon: string }[] = [
   { page: 'more', label: 'Прочее', icon: '⋯' },
 ]
 const TAB_OF: Record<Page, Page> = {
-  home: 'home', balance: 'home', snapshot: 'snapshot', moves: 'more', statements: 'statements', statementNew: 'statements', statementTask: 'statements', statementProblems: 'statements', accounts: 'accounts',
+  home: 'home', balance: 'home', snapshot: 'snapshot', moves: 'more', statements: 'statements', statementNew: 'statements', statementTask: 'statements', statementProblems: 'statements', statementAccount: 'statements', accounts: 'accounts',
   more: 'more', periods: 'more', dump: 'more', settings: 'more', baseCurrency: 'more', homeSettings: 'more', accountsSettings: 'more', enterBalances: 'more', account: 'accounts', newAccount: 'accounts', imports: 'more', importNew: 'more', importJob: 'more',
 }
 
@@ -157,6 +157,7 @@ export function Shell({ db, ctx, initialRef, email }: { db: SupabaseClient; ctx:
           {page === 'statementNew' && <StatementNewScreen />}
           {page === 'statementTask' && accountId && <StatementTaskScreen taskId={accountId} />}
           {page === 'statementProblems' && accountId && <StatementProblemsScreen taskId={accountId} />}
+          {page === 'statementAccount' && accountId && <StatementAccountScreen taskId={accountId} />}
           {page === 'accounts' && <AccountsScreen />}
           {page === 'more' && <MoreScreen />}
           {page === 'periods' && <PeriodsScreen />}
