@@ -72,6 +72,16 @@ export async function recognizeGroups(ctx: CoreContext, groups: CpGroup[], date 
   return out
 }
 
+export interface CpStatus { total: number; recognized: number; unrecognized: CpGroup[] }
+
+/** Сколько контрагентов в выписке и сколько из них опознано по справочнику (до скачивания файла контрагентов). */
+export async function counterpartyStatus(ctx: CoreContext, st: ParsedStatement): Promise<CpStatus> {
+  const groups = collectCounterpartyGroups(st)
+  const found = await recognizeGroups(ctx, groups)
+  const unrecognized = groups.filter((_, i) => !found[i])
+  return { total: groups.length, recognized: groups.length - unrecognized.length, unrecognized }
+}
+
 /**
  * Загрузка файла контрагентов. Правила:
  * колонка 2 заполнена и имя есть в справочнике: признаки (название, IBAN) добавляются этому контрагенту;

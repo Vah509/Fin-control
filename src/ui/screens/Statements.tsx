@@ -1,9 +1,9 @@
 // Выписки: список задач, новая загрузка (шаг 1), страница задачи (шаги 2 и далее). Задачи хранятся в базе.
 import { useState } from 'react'
-import { compareTask, createStatementTask, deleteStatementTask, finishStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, resolveProblem, saveComparison, taskStatement, updateTaskState } from '../../core'
+import { compareTask, createStatementTask, deleteStatementTask, finishStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, resolveProblem, confirmCounterpartiesRecognized, saveComparison, taskStatement, updateTaskState } from '../../core'
 import type { ProblemAction, ProblemDetails } from '../../core'
 import {
-  applyCounterpartyFile, buildCounterpartyWorkbook, buildOperationsWorkbook, extractPdfPages, operationsFileName, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
+  applyCounterpartyFile, buildCounterpartyWorkbook, counterpartyStatus, buildOperationsWorkbook, extractPdfPages, operationsFileName, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
 } from '../../core/statements'
 import type { StatementTaskState } from '../../core'
 import type { StatementTask } from '../../data/types'
@@ -198,6 +198,8 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
   const [xlsx, setXlsx] = useState<Picked | null>(null)
   const st = taskStatement(task)
   const state = task.state as StatementTaskState
+  const cps = useLoad(() => counterpartyStatus(ctx, st), [task.id, task.updatedAt])
+  const allKnown = !!cps.data && cps.data.unrecognized.length === 0
 
   async function run(fn: () => Promise<string>) {
     setBusy(true); setMsg(null)
@@ -217,6 +219,7 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
     bump()
     return `Принято. Строк: ${r.rowsLinked}, новых контрагентов: ${r.created}, признаков добавлено: ${r.identifiersAdded}${r.reassigned ? `, переназначено: ${r.reassigned}` : ''}.`
   })
+  const skipCp = () => run(async () => { await confirmCounterpartiesRecognized(ctx, task.id); bump(); return 'Все контрагенты опознаны, переходим к шагу 3.' })
   const downloadOps = () => run(async () => {
     const name = operationsFileName(st)
     const cmp = await compareTask(ctx, task.id)
@@ -257,13 +260,30 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
             Загружен файл {state.counterpartiesFile}{state.counterpartiesAt ? ` (${dateTimeRu(state.counterpartiesAt)})` : ''}. Результат: новых контрагентов {state.counterpartiesTotals.created}, признаков добавлено {state.counterpartiesTotals.identifiersAdded}{state.counterpartiesTotals.reassigned ? `, переназначено ${state.counterpartiesTotals.reassigned}` : ''}.
           </Notice>
         )}
-        {!state.counterpartiesLoaded && state.counterpartyFileDownloaded && <p className="muted">Файл контрагентов уже скачан. Теперь правьте его и загрузите ниже.</p>}
-        <p className="muted">{state.counterpartiesLoaded ? 'Если нужно что-то поправить, скачайте файл ещё раз и загрузите снова.' : 'Скачайте файл, впишите во 2-ю колонку имена из справочника (пусто = новый контрагент), загрузите обратно. Если в файле ошибка, ничего не записывается.'}</p>
-        <button className="btn primary" disabled={busy} onClick={() => void download()}>Скачать файл контрагентов</button>
-        <input type="file" accept=".xlsx" disabled={busy}
-          onChange={(e) => { setMsg(null); void readPicked(e.target.files?.[0]).then(setXlsx).catch((x) => setMsg({ kind: 'error', text: errorText(x) })) }} />
-        {xlsx && <p className="muted">Выбран: {xlsx.name}</p>}
-        <button className="btn primary" disabled={busy || !xlsx} onClick={() => void upload()}>Загрузить правленый файл</button>
+        {cps.data && (
+          <p>Контрагентов в выписке: {cps.data.total} · опознано: {cps.data.recognized} · не опознано: {cps.data.unrecognized.length}</p>
+        )}
+        {cps.data && cps.data.unrecognized.length > 0 && (
+          <p className="muted">Не опознаны: {cps.data.unrecognized.slice(0, 5).map((g) => g.text).join('; ')}{cps.data.unrecognized.length > 5 ? ` и ещё ${cps.data.unrecognized.length - 5}` : ''}</p>
+        )}
+        {!state.counterpartiesLoaded && allKnown && (
+          <>
+            <Notice kind="ok">Все контрагенты опознаны, файл не обязателен.</Notice>
+            <button className="btn primary" disabled={busy} onClick={() => void skipCp()}>Продолжить к шагу 3</button>
+            <button className="btn" disabled={busy} onClick={() => void download()}>Скачать файл контрагентов для проверки</button>
+          </>
+        )}
+        {!(allKnown && !state.counterpartiesLoaded) && (
+          <>
+            {!state.counterpartiesLoaded && state.counterpartyFileDownloaded && <p className="muted">Файл контрагентов уже скачан. Теперь правьте его и загрузите ниже.</p>}
+            <p className="muted">{state.counterpartiesLoaded ? 'Если нужно что-то поправить, скачайте файл ещё раз и загрузите снова.' : 'Скачайте файл, впишите во 2-ю колонку имена из справочника (пусто = новый контрагент), загрузите обратно. Если в файле ошибка, ничего не записывается.'}</p>
+            <button className="btn primary" disabled={busy} onClick={() => void download()}>Скачать файл контрагентов</button>
+            <input type="file" accept=".xlsx" disabled={busy}
+              onChange={(e) => { setMsg(null); void readPicked(e.target.files?.[0]).then(setXlsx).catch((x) => setMsg({ kind: 'error', text: errorText(x) })) }} />
+            {xlsx && <p className="muted">Выбран: {xlsx.name}</p>}
+            <button className="btn primary" disabled={busy || !xlsx} onClick={() => void upload()}>Загрузить правленый файл</button>
+          </>
+        )}
       </div>
       <div className="card">
         <p className={state.counterpartiesLoaded ? '' : 'muted'}>{state.operationsDone ? '✓' : state.counterpartiesLoaded ? '→' : '○'} Шаг 3. Файл «Операции + Сверка»</p>

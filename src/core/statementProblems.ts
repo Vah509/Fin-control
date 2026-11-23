@@ -8,8 +8,9 @@ import { fail } from './errors'
 import { addAccountLast4 } from './identifiers'
 import { assertUnlocked } from './locks'
 import { readSettings } from './settings'
-import { getTask, taskStatement, type StatementTaskState } from './statementTasks'
+import { getTask, recordCounterpartyUpload, taskStatement, type StatementTaskState } from './statementTasks'
 import { compareWithDb, type Comparison, type ProblemDetails } from './statements/compare'
+import { counterpartyStatus } from './statements/counterparties'
 import { reconcileAccount } from './statements/reconcile'
 import type { StatementDecisions } from './statements/types'
 import { buildStatementTransactions, statementBookedAt } from './statements/write'
@@ -75,6 +76,17 @@ export async function finishStatementTask(ctx: CoreContext, taskId: string): Pro
     audit: [auditEntry(ctx, 'statement_written', { tableName: 'statement_tasks', recordId: taskId, details: { written: txs.length, accounts: st.accounts.map((a) => a.key) } })],
   })
   return { task: next, written: txs.length }
+}
+
+/** Шаг 2 без файла: все контрагенты выписки уже опознаны, сразу к шагу 3. Иначе отказ. */
+export async function confirmCounterpartiesRecognized(ctx: CoreContext, taskId: string): Promise<StatementTask> {
+  if (!ctx.actor.isOwner) fail('FORBIDDEN', 'шаг выполняет только владелец')
+  const t = await getTask(ctx, taskId)
+  const st = taskStatement(t)
+  const c = await counterpartyStatus(ctx, st)
+  if (c.unrecognized.length > 0) fail('INVALID_FIELD', `не опознано контрагентов: ${c.unrecognized.length}, нужен файл контрагентов`)
+  const rows = st.accounts.reduce((n, a) => n + a.rows.length, 0)
+  return recordCounterpartyUpload(ctx, taskId, 'без файла: все опознаны', { rows, created: 0, identifiersAdded: 0, reassigned: 0 })
 }
 
 export type ProblemAction =
