@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseSlspStatement } from '../../src/core/statements'
-import { compareTask, createStatementTask, finishStatementTask, listTaskProblems, resolveProblem, saveComparison } from '../../src/core'
+import { checkTaskBalances, compareTask, createStatementTask, finishStatementTask, listTaskProblems, resolveProblem, saveComparison } from '../../src/core'
 import type { Counterparty, Transaction } from '../../src/data/types'
 import { ID, setup } from '../helpers'
 import { buildSlsp } from './slspFixture'
@@ -13,15 +13,17 @@ const stmt = (tamper = false) => parseSlspStatement(buildSlsp({
     { dates: '06.09.2026 06.09.2026', lines: ['Prijatá SEPA platba', 'SK00 0000 0000 0000 0000 0002 BIC: TESTSKBX', 'Názov protiúčtu: Test Sender'], amount: '500,00', balance: '1 470,00' },
   ]],
 }))
+const rows = async (st: { listTransactions: (q: { accountId: string }) => Promise<Transaction[]> }) => (await st.listTransactions({ accountId: ID.space })).filter((t) => !t.isOpening)
 const tx = (id: string, date: string, amountMinor: number): Transaction => ({
   id, accountId: ID.space, counterpartyId: null, importId: null, source: 'manual', bookedAt: `${date}T10:00:00.000Z`, type: amountMinor > 0 ? 'income' : 'expense',
   amountMinor, currencyKey: 'eur', originalAmountMinor: null, originalCurrencyKey: null, tagId: null, planType: null, comment: null,
   transferId: null, dedupeHash: null, deletedAt: null, isOpening: false, raw: null, createdBy: null, createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z',
 })
-async function prepared(opts: { identifier?: boolean; txs?: Transaction[]; senderAccountId?: string | null; tamper?: boolean } = {}) {
+async function prepared(opts: { identifier?: boolean; txs?: Transaction[]; senderAccountId?: string | null; tamper?: boolean; noOpening?: boolean } = {}) {
   const t = await setup({ withCrypto: true })
   const st = stmt(opts.tamper)
-  const put: Record<string, unknown[]> = { transactions: opts.txs ?? [] }
+  const opening: Transaction = { ...tx('opening', '2026-08-31', 100000), type: 'adjustment', isOpening: true }
+  const put: Record<string, unknown[]> = { transactions: [...(opts.noOpening ? [] : [opening]), ...(opts.txs ?? [])] }
   if (opts.identifier !== false) put.accountIdentifiers = [{ id: 'i1', accountId: ID.space, kind: 'account_number', valueHash: 'h', valueEnc: 'e', last4: st.accounts[0]!.key, validFrom: '2020-01-01', validTo: null }]
   if (opts.senderAccountId !== undefined) {
     const cp: Counterparty = { id: 'cp-own', key: 'own', name: 'Свой: Test Sender', kind: 'own_account', accountId: opts.senderAccountId, defaultTagId: null, defaultPlanType: null }
@@ -46,7 +48,7 @@ describe('решение проблем выписки', () => {
     const p = await first(ctx, task.id, 'date_mismatch')
     await expect(resolveProblem(ctx, task.id, p.id, { kind: 'keep' })).rejects.toThrow(/решения пока нет/)
     await expect(finishStatementTask(ctx, task.id)).rejects.toThrow(/нерешённые/)
-    expect(await storage.listTransactions({ accountId: ID.space })).toHaveLength(1)
+    expect(await rows(storage)).toHaveLength(1)
   })
 
   it('дата дальше допуска: две разные операции (новая и лишняя в базе)', async () => {
@@ -60,7 +62,7 @@ describe('решение проблем выписки', () => {
     const p = await first(ctx, task.id, 'amount_mismatch')
     expect(p.details).toMatchObject({ amountMinor: 50000, dbAmountMinor: 49000 })
     await resolveProblem(ctx, task.id, p.id, { kind: 'accept_statement' })
-    const t = (await storage.listTransactions({ accountId: ID.space })).find((x) => x.id === 'a')!
+    const t = (await rows(storage)).find((x) => x.id === 'a')!
     expect([t.amountMinor, t.bookedAt]).toEqual([50000, '2026-09-06T10:00:03.000Z'])
     expect(await kinds(ctx, task.id)).toEqual([])
     expect((await finishStatementTask(ctx, task.id)).written).toBe(2)
@@ -70,8 +72,8 @@ describe('решение проблем выписки', () => {
     const a = await prepared({ senderAccountId: null, txs: [withCp(tx('a', '2026-09-07', 49000))] })
     await resolveProblem(a.ctx, a.task.id, (await first(a.ctx, a.task.id, 'amount_mismatch')).id, { kind: 'keep_base' })
     expect(await kinds(a.ctx, a.task.id)).toEqual([])
-    expect((await finishStatementTask(a.ctx, a.task.id)).written).toBe(2)
-    expect((await a.storage.listTransactions({ accountId: ID.space })).find((x) => x.id === 'a')!.amountMinor).toBe(49000)
+    await expect(finishStatementTask(a.ctx, a.task.id)).rejects.toThrow(/остатки не сходятся/)   // база осталась с 490,00: конечный остаток не равен выписке
+    expect((await rows(a.storage)).find((x) => x.id === 'a')!.amountMinor).toBe(49000)
 
     const b = await prepared({ senderAccountId: null, txs: [withCp(tx('a', '2026-09-07', 49000))] })
     await resolveProblem(b.ctx, b.task.id, (await first(b.ctx, b.task.id, 'amount_mismatch')).id, { kind: 'distinct' })
@@ -83,7 +85,7 @@ describe('решение проблем выписки', () => {
     expect(await kinds(a.ctx, a.task.id)).toEqual(['db_only'])
     await resolveProblem(a.ctx, a.task.id, (await first(a.ctx, a.task.id, 'db_only')).id, { kind: 'keep' })
     expect(await kinds(a.ctx, a.task.id)).toEqual([])
-    expect((await finishStatementTask(a.ctx, a.task.id)).written).toBe(3)
+    await expect(finishStatementTask(a.ctx, a.task.id)).rejects.toThrow(/остатки не сходятся/)   // оставленная лишняя операция −7,77 сдвигает остаток
 
     const b = await prepared({ txs: [tx('x', '2026-09-04', -777)] })
     await resolveProblem(b.ctx, b.task.id, (await first(b.ctx, b.task.id, 'db_only')).id, { kind: 'delete' })
@@ -107,7 +109,7 @@ describe('решение проблем выписки', () => {
     await resolveProblem(ctx, task.id, (await first(ctx, task.id, 'transfer_unpaired')).id, { kind: 'plain' })
     expect(await kinds(ctx, task.id)).toEqual([])
     expect((await finishStatementTask(ctx, task.id)).written).toBe(3)
-    expect((await storage.listTransactions({ accountId: ID.space })).filter((t) => t.type === 'income' && t.transferId === null)).toHaveLength(1)
+    expect((await rows(storage)).filter((t) => t.type === 'income' && t.transferId === null)).toHaveLength(1)
   })
 
   it('чужое действие и не владелец отклоняются', async () => {
@@ -116,5 +118,21 @@ describe('решение проблем выписки', () => {
     const o = await prepared({ txs: [tx('x', '2026-09-04', -777)] })
     const ctx2 = { ...o.ctx, actor: { userId: 'u2', isOwner: false } }
     await expect(resolveProblem(ctx2, o.task.id, (await first(o.ctx, o.task.id, 'db_only')).id, { kind: 'keep' })).rejects.toThrow(/владелец/)
+  })
+})
+
+describe('шаг 4: сверка остатков', () => {
+  it('сходятся: считаются начало и конец, запись разрешена', async () => {
+    const { ctx, task } = await prepared()
+    const b = await checkTaskBalances(ctx, task.id)
+    expect(b.ok).toBe(true)
+    expect(b.items[0]).toMatchObject({ startDbMinor: 100000, startStmtMinor: 100000, endExpectedMinor: 147000, endStmtMinor: 147000 })
+  })
+  it('нет начального остатка в базе: не сходятся, запись заблокирована', async () => {
+    const { ctx, task, storage } = await prepared({ noOpening: true })
+    const b = await checkTaskBalances(ctx, task.id)
+    expect([b.ok, b.items[0]!.startOk, b.items[0]!.endOk, b.items[0]!.startDbMinor]).toEqual([false, false, false, 0])
+    await expect(finishStatementTask(ctx, task.id)).rejects.toThrow(/остатки не сходятся/)
+    expect(await rows(storage)).toHaveLength(0)
   })
 })

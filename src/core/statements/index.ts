@@ -9,3 +9,5 @@ export { buildOperationsWorkbook, operationsFileName, OPS_SHEET, RECON_SHEET } f
 export { compareWithDb, cmpKey } from './compare'
 export type { Comparison, DbOnlyItem, ProblemDetails, ProblemItem } from './compare'
 export { buildStatementTransactions } from './write'
+export { checkStatementBalances } from './balances'
+export type { BalanceCheck, BalanceCheckItem } from './balances'

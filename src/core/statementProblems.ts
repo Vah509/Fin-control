@@ -10,8 +10,10 @@ import { assertUnlocked } from './locks'
 import { readSettings } from './settings'
 import { getTask, recordCounterpartyUpload, taskStatement, type StatementTaskState } from './statementTasks'
 import { compareWithDb, type Comparison, type ProblemDetails } from './statements/compare'
+import { checkStatementBalances } from './statements/balances'
 import { counterpartyStatus } from './statements/counterparties'
 import { reconcileAccount } from './statements/reconcile'
+import type { BalanceCheck } from './statements/balances'
 import type { StatementDecisions } from './statements/types'
 import { buildStatementTransactions, statementBookedAt } from './statements/write'
 import { checkTransactionShape } from './transactions'
@@ -67,6 +69,8 @@ export async function finishStatementTask(ctx: CoreContext, taskId: string): Pro
     await saveComparison(ctx, taskId, cmp)
     fail('INVALID_FIELD', `есть нерешённые проблемы: ${cmp.problems.length}`)
   }
+  const bal = await checkStatementBalances(ctx, st, cmp)
+  if (!bal.ok) fail('BALANCE_MISMATCH', 'остатки не сходятся, запись невозможна')
   const txs = await buildStatementTransactions(ctx, st, cmp)
   const now = ctx.now().toISOString()
   const next: StatementTask = { ...t, status: 'done', state: { ...s, operationsDone: true, problemsCount: 0, writtenCount: txs.length, writtenAt: now } as unknown as Json, updatedAt: now }
@@ -76,6 +80,13 @@ export async function finishStatementTask(ctx: CoreContext, taskId: string): Pro
     audit: [auditEntry(ctx, 'statement_written', { tableName: 'statement_tasks', recordId: taskId, details: { written: txs.length, accounts: st.accounts.map((a) => a.key) } })],
   })
   return { task: next, written: txs.length }
+}
+
+/** Проверка остатков задачи (шаг 4): считается заново при каждом вызове. */
+export async function checkTaskBalances(ctx: CoreContext, taskId: string): Promise<BalanceCheck> {
+  const t = await getTask(ctx, taskId)
+  const st = taskStatement(t)
+  return checkStatementBalances(ctx, st, await compareWithDb(ctx, st, decisionsOf(t)))
 }
 
 /** Шаг 2 без файла: все контрагенты выписки уже опознаны, сразу к шагу 3. Иначе отказ. */

@@ -1,6 +1,6 @@
 // Выписки: список задач, новая загрузка (шаг 1), страница задачи (шаги 2 и далее). Задачи хранятся в базе.
 import { useState } from 'react'
-import { compareTask, createStatementTask, deleteStatementTask, finishStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, resolveProblem, confirmCounterpartiesRecognized, saveComparison, taskStatement, updateTaskState } from '../../core'
+import { compareTask, createStatementTask, deleteStatementTask, checkTaskBalances, finishStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, resolveProblem, confirmCounterpartiesRecognized, saveComparison, taskStatement, updateTaskState } from '../../core'
 import type { ProblemAction, ProblemDetails } from '../../core'
 import {
   applyCounterpartyFile, buildCounterpartyWorkbook, counterpartyStatus, buildOperationsWorkbook, extractPdfPages, operationsFileName, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
@@ -122,7 +122,7 @@ const HELP: Record<string, string> = {
   amount_mismatch: 'В базе найдена операция того же контрагента (±3 дня), сумма другая.',
   account_missing: 'Выписка относится к счёту, которого нет в базе (или у него нет признака «последние 4 цифры»).',
   transfer_unpaired: 'Перевод на свой счёт, парную запись создать нельзя.',
-  date_mismatch: 'Нужна доработка: в базе есть операция с той же суммой, но датой в пределах 3 дней. Решения пока нет, «Готово» заблокировано.',
+  date_mismatch: 'Нужна доработка: в базе есть операция с той же суммой, но датой в пределах 3 дней. Решения пока нет, запись заблокирована.',
 }
 
 export function StatementProblemsScreen({ taskId }: { taskId: string }) {
@@ -148,7 +148,7 @@ export function StatementProblemsScreen({ taskId }: { taskId: string }) {
       {list.loading && <Loading />}
       {list.error && <ErrorBox text={list.error} onRetry={list.reload} />}
       {msg && <Notice kind={msg.kind === 'ok' ? 'ok' : 'warn'}>{msg.text}</Notice>}
-      {list.data && list.data.length === 0 && <p className="muted">Проблем нет. Вернитесь на страницу загрузки и нажмите «Готово».</p>}
+      {list.data && list.data.length === 0 && <p className="muted">Проблем нет. Вернитесь на страницу загрузки, шаг 4.</p>}
       {list.data && list.data.length > 0 && (
         <>
           <p className="muted">Пока есть проблемы, выписка в базу не записывается. Решённая проблема исчезает из списка.</p>
@@ -220,6 +220,8 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
     return `Принято. Строк: ${r.rowsLinked}, новых контрагентов: ${r.created}, признаков добавлено: ${r.identifiersAdded}${r.reassigned ? `, переназначено: ${r.reassigned}` : ''}.`
   })
   const skipCp = () => run(async () => { await confirmCounterpartiesRecognized(ctx, task.id); bump(); return 'Все контрагенты опознаны, переходим к шагу 3.' })
+  const ready = !!state.counterpartiesLoaded && !!state.comparedAt && (state.problemsCount ?? 0) === 0 && !state.operationsDone
+  const bal = useLoad(() => (ready ? checkTaskBalances(ctx, task.id) : Promise.resolve(null)), [task.id, task.updatedAt, ready])
   const downloadOps = () => run(async () => {
     const name = operationsFileName(st)
     const cmp = await compareTask(ctx, task.id)
@@ -230,7 +232,7 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
   })
   const finish = () => run(async () => { const r = await finishStatementTask(ctx, task.id); bump(); return `Записано операций в базу: ${r.written}. Задача закрыта.` })
   async function remove() {
-    if (!window.confirm('Удалить загрузку? Разобранные данные будут стёрты. Уже записанные контрагенты останутся.')) return
+    if (!window.confirm('Удалить задачу? Разобранные данные будут стёрты. Уже записанные контрагенты останутся.')) return
     setBusy(true)
     try { await deleteStatementTask(ctx, task.id); bump(); go('statements') } catch (e) { setMsg({ kind: 'error', text: errorText(e) }); setBusy(false) }
   }
@@ -290,26 +292,47 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
         {!state.counterpartiesLoaded && <p className="muted">Станет доступен после шага 2.</p>}
         {state.counterpartiesLoaded && (
           <>
-            <p className="muted">Приложение сравнит выписку с операциями в базе за период выписки. Нормально: операции нет в базе (будет записана) или она есть и там и там. Проблемы (запись блокируется, пока их нет): операция есть в базе, а в выписке нет; счёта выписки нет в базе; перевод на свой счёт, для которого нельзя создать пару (другая валюта, счёт не привязан). Кнопка «Готово» записывает новые операции в базу одним пакетом. В файле плюсы в колонках «В выписке» и «В базе».</p>
+            <p className="muted">Приложение сравнит выписку с операциями в базе за период выписки. Нормально: операции нет в базе (будет записана) или она есть и там и там. Проблемы (запись блокируется, пока их нет): операция есть в базе, а в выписке нет; счёта выписки нет в базе; перевод на свой счёт, для которого нельзя создать пару (другая валюта, счёт не привязан). Запись в базу выполняется на шаге 4 после сверки остатков. В файле плюсы в колонках «В выписке» и «В базе».</p>
             {state.comparedAt && (state.missingAccounts?.length ?? 0) > 0 && (
               <Notice kind="warn">Нет в базе (или признак счёта неоднозначен): …{state.missingAccounts!.join(', …')}. По ним сравнения не было, «В базе» пусто.</Notice>
             )}
-            {state.comparedAt && !state.operationsDone && (state.problemsCount ?? 0) === 0 && <Notice kind="ok">Проблем нет. «Готово» запишет в базу новые операции выписки.</Notice>}
+            {state.comparedAt && !state.operationsDone && (state.problemsCount ?? 0) === 0 && <Notice kind="ok">Проблем нет. Переходите к шагу 4.</Notice>}
             {state.comparedAt && !state.operationsDone && (state.problemsCount ?? 0) > 0 && <Notice kind="warn">Проблем: {state.problemsCount}. Откройте «Проблемы».</Notice>}
             {state.operationsDone && <Notice kind="ok">Задача закрыта{state.writtenCount !== undefined ? `, записано операций: ${state.writtenCount}` : ''}.</Notice>}
             <button className="btn primary" disabled={busy} onClick={() => void downloadOps()}>{state.comparedAt ? 'Сравнить и скачать файл ещё раз' : 'Сравнить с базой и скачать файл'}</button>
             {!state.operationsDone && state.comparedAt && (state.problemsCount ?? 0) > 0 && (
               <button className="btn" disabled={busy} onClick={() => go('statementProblems', { accountId: task.id })}>Проблемы ({state.problemsCount})</button>
             )}
-            {!state.operationsDone && state.comparedAt && (state.problemsCount ?? 0) === 0 && (
-              <button className="btn primary" disabled={busy} onClick={() => void finish()}>Готово</button>
-            )}
+          </>
+        )}
+      </div>
+      <div className="card">
+        <p className={ready || state.operationsDone ? '' : 'muted'}>{state.operationsDone ? '✓' : ready ? '→' : '○'} Шаг 4. Сверка остатков и запись</p>
+        {state.operationsDone && <Notice kind="ok">Задача закрыта{state.writtenCount !== undefined ? `, записано операций: ${state.writtenCount}` : ''}. Задачу можно удалить, записанные данные останутся.</Notice>}
+        {!state.operationsDone && !ready && <p className="muted">Станет доступен, когда в шаге 3 не будет проблем.</p>}
+        {ready && bal.loading && <p className="muted">Считаю остатки…</p>}
+        {ready && bal.error && <ErrorBox text={bal.error} onRetry={bal.reload} />}
+        {ready && bal.data && (
+          <>
+            {bal.data.items.map((i) => (
+              <div key={i.accountKey}>
+                <p>…{i.accountKey} {i.accountName} ({i.periodStart} — {i.periodEnd})</p>
+                <p className="muted">Начало: в базе {formatMinor(i.startDbMinor, 2)}, в выписке {formatMinor(i.startStmtMinor, 2)} {i.startOk ? '✓' : '✗'}</p>
+                <p className="muted">Конец: в базе после записи {formatMinor(i.endExpectedMinor, 2)}, в выписке {formatMinor(i.endStmtMinor, 2)} {i.endOk ? '✓' : '✗'} {i.currency}</p>
+                {!i.startOk && i.startDbMinor === 0 && <p className="muted">В базе нет начального остатка. Задайте остаток счёта на дату до начала периода (Счета, ввод остатка) и обновите проверку.</p>}
+              </div>
+            ))}
+            {bal.data.ok
+              ? <Notice kind="ok">Остатки сходятся.</Notice>
+              : <Notice kind="warn">Остатки не сходятся. Запись заблокирована.</Notice>}
+            <button className="btn" disabled={busy} onClick={() => bal.reload()}>Проверить остатки ещё раз</button>
+            <button className="btn primary" disabled={busy || !bal.data.ok} onClick={() => void finish()}>Записать и закрыть задачу</button>
           </>
         )}
       </div>
       {busy && <p className="muted">Подождите…</p>}
       {msg && <Notice kind={msg.kind === 'ok' ? 'ok' : 'warn'}>{msg.text}</Notice>}
-      <button className="btn" disabled={busy} onClick={() => void remove()}>Удалить загрузку</button>
+      <button className="btn" disabled={busy} onClick={() => void remove()}>Удалить задачу</button>
     </>
   )
 }

@@ -32,6 +32,7 @@ const ERR: Record<ErrorCode, string> = {
   STATEMENT_PARSE: 'Не удалось разобрать выписку',
   COUNTERPARTY_FILE_INVALID: 'Файл контрагентов не принят',
   RECONCILE_FAILED: 'Сверка выписки не сошлась',
+  BALANCE_MISMATCH: 'Остатки не сходятся',
 }
 
 export function errorText(e: unknown): string {
