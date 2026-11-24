@@ -148,3 +148,10 @@ input:not([type=checkbox]):not([type=radio]), select {
 .check input { width: 22px; height: 22px; flex: none; }
 
 .pre { white-space: pre-wrap; word-break: break-word; overflow-x: auto; font-size: 12px; max-height: 50vh; }
+
+/* Теги: группы и «ступенька» тегов под заголовком */
+.tag-groups > li.card { margin-bottom: 12px; }
+.tag-groups .group-head { display: flex; align-items: center; gap: 8px; }
+.tag-steps { margin: 8px 0 0 22px; padding-left: 12px; border-left: 3px solid var(--line); }
+.tag-steps .rows { margin-bottom: 8px; }
+.tag-form { display: flex; flex-direction: column; gap: 8px; width: 100%; }

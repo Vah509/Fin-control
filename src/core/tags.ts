@@ -141,3 +141,41 @@ export async function moveTag(ctx: CoreContext, id: string, dir: -1 | 1): Promis
     audit: [auditEntry(ctx, 'tags_reordered', { tableName: 'tags', details: { groupId: t.groupId, order: list.map((x) => x.id) } })],
   })
 }
+
+/** Подмножество в новом порядке занимает те же места, что и раньше; остальные элементы (например архивные теги) стоят где стояли. */
+function applySubsetOrder<T extends { id: string }>(current: T[], orderedIds: string[]): T[] {
+  const set = new Set(orderedIds)
+  const byId = new Map(current.map((x) => [x.id, x]))
+  if (orderedIds.length !== set.size || !orderedIds.every((id) => byId.has(id))) fail('INVALID_FIELD', 'в порядке только существующие элементы по одному разу')
+  const queue = [...orderedIds]
+  return current.map((x) => (set.has(x.id) ? byId.get(queue.shift()!)! : x))
+}
+
+/** Порядок обычных групп перетаскиванием (служебная всегда последняя). */
+export async function reorderTagGroups(ctx: CoreContext, orderedIds: string[]): Promise<void> {
+  needOwner(ctx)
+  const groups = await ctx.storage.list('tagGroups')
+  const list = byOrder(groups.filter((g) => !g.isService))
+  if (orderedIds.some((id) => !list.some((g) => g.id === id))) fail('INVALID_FIELD', 'служебную группу двигать нельзя')
+  const next = applySubsetOrder(list, orderedIds)
+  const changed = next.map((g, k) => ({ ...g, sortOrder: k + 1 })).filter((g) => g.sortOrder !== list.find((o) => o.id === g.id)!.sortOrder)
+  if (!changed.length) return
+  await ctx.storage.applyBatch({
+    put: { tagGroups: changed },
+    audit: [auditEntry(ctx, 'tag_groups_reordered', { tableName: 'tag_groups', details: { order: next.map((g) => g.id) } })],
+  })
+}
+
+/** Порядок тегов группы перетаскиванием (можно передать только видимые, архивные остаются на местах). */
+export async function reorderTags(ctx: CoreContext, groupId: string, orderedIds: string[]): Promise<void> {
+  needOwner(ctx)
+  const tags = await ctx.storage.list('tags')
+  const list = byOrder(tags.filter((t) => t.groupId === groupId))
+  const next = applySubsetOrder(list, orderedIds)
+  const changed = next.map((t, k) => ({ ...t, sortOrder: k })).filter((t) => t.sortOrder !== list.find((o) => o.id === t.id)!.sortOrder)
+  if (!changed.length) return
+  await ctx.storage.applyBatch({
+    put: { tags: changed },
+    audit: [auditEntry(ctx, 'tags_reordered', { tableName: 'tags', details: { groupId, order: next.map((t) => t.id) } })],
+  })
+}

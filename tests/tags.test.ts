@@ -66,3 +66,20 @@ describe('теги', () => {
     await expect(createTagGroup(other.ctx, { name: 'X' })).rejects.toMatchObject({ code: 'FORBIDDEN' })
   })
 })
+
+import { reorderTagGroups, reorderTags } from '../src/core'
+describe('порядок перетаскиванием', () => {
+  it('видимые теги меняют порядок, архивный остаётся на месте; группы без служебной', async () => {
+    const { ctx, food, cafe } = await base()
+    const a = await createTag(ctx, { groupId: food.id, name: 'A' })
+    const b = await createTag(ctx, { groupId: food.id, name: 'B' })
+    const c = await createTag(ctx, { groupId: food.id, name: 'C' })
+    await setTagArchived(ctx, b.id, true)
+    await reorderTags(ctx, food.id, [c.id, a.id])
+    expect((await names(ctx))[0]).toEqual(['Продукты', ['C', 'B', 'A']])
+    await reorderTagGroups(ctx, [cafe.id, food.id])
+    expect((await names(ctx)).map((x) => x[0])).toEqual(['Кафе', 'Продукты', 'Разовые'])
+    await expect(reorderTagGroups(ctx, ['g-once'])).rejects.toMatchObject({ code: 'INVALID_FIELD' })
+    await expect(reorderTags(ctx, food.id, [a.id, a.id])).rejects.toMatchObject({ code: 'INVALID_FIELD' })
+  })
+})
