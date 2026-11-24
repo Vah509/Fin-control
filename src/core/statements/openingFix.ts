@@ -68,6 +68,7 @@ export async function applyOpeningFixes(ctx: CoreContext, st: ParsedStatement, c
   const accounts = await ctx.storage.list('accounts')
   const put: unknown[] = []
   const audit: ReturnType<typeof auditEntry>[] = []
+  const newOpenings: unknown[] = []
   for (const p of chosen) {
     const acc = accounts.find((a) => a.id === p.accountId)!
     // buildTransaction проверяет «одна начальная»: создаём как обычную корректировку и помечаем начальной после
@@ -75,7 +76,7 @@ export async function applyOpeningFixes(ctx: CoreContext, st: ParsedStatement, c
       accountId: acc.id, bookedAt: p.openingAt, type: 'adjustment', amountMinor: p.openingMinor, comment: 'Начальный остаток (из выписки)',
     }, acc).catch((e) => { throw e })
     const opening = { ...built, isOpening: true }
-    put.push(opening)
+    newOpenings.push(opening)
     audit.push(transactionAudit(ctx, 'opening_created', opening))
     if (p.kind === 'move') {
       const old = (await ctx.storage.getTransaction(p.oldOpeningId!)) ?? fail('NOT_FOUND', 'прежний начальный остаток не найден')
@@ -90,10 +91,11 @@ export async function applyOpeningFixes(ctx: CoreContext, st: ParsedStatement, c
         await assertUnlocked(ctx, acc, at)
         next = { ...old, isOpening: false, amountMinor: p.gapMinor!, bookedAt: at, comment: 'Неучтённая разница между выписками', updatedAt: now }
       }
-      put.push(next)
+      put.push(next) // прежний остаток раньше нового: в базе уникален один начальный на счёт (uq_transactions_opening), проверка по строкам
       audit.push(transactionAudit(ctx, p.gapMinor === 0 ? 'opening_removed' : 'opening_to_adjustment', next, old))
     }
   }
+  put.push(...newOpenings)
   await ctx.storage.applyBatch({ put: { transactions: put }, audit } as never)
   return chosen.length
 }
