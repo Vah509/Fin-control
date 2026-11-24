@@ -35,20 +35,20 @@ function parseDates(text: string): string[] {
   return [...text.matchAll(DATE_RE)].map((m) => isoDate(m[1]!, m[2]!, m[3]!))
 }
 
-interface Cols { descX: number; amountX: number; feeX: number; balX: number; top: number }
+interface Cols { descX: number; amountX: number; feeX: number; /** Infinity: у выписки нет колонки «Zostatok po transakcii» (бизнес-счёт) */ balX: number; top: number }
 
 function findTable(lines: Line[]): Cols | null {
-  const hi = lines.findIndex((l) => l.items.some((i) => i.str.trim().startsWith('Zostatok')) && l.items.some((i) => i.str.trim() === 'Popis'))
+  const hi = lines.findIndex((l) => l.items.some((i) => i.str.trim() === 'Popis') && l.items.filter((i) => i.str.trim() === 'Suma').length >= 2)
   if (hi < 0) return null
   const h = lines[hi]!
   const sumas = h.items.filter((i) => i.str.trim() === 'Suma')
   const pop = h.items.find((i) => i.str.trim() === 'Popis')!
-  const zos = h.items.find((i) => i.str.trim().startsWith('Zostatok'))!
+  const zos = h.items.find((i) => i.str.trim().startsWith('Zostatok'))   // нет у бизнес-счёта
   if (sumas.length < 2) return null
   // вторая строка шапки ("valuty zúčtovania ... po transakcii") ниже на ~11
   let top = h.y
   for (let k = hi + 1; k < lines.length && lines[k]!.y > h.y - 20; k++) top = lines[k]!.y
-  return { descX: pop.x, amountX: sumas[0]!.x, feeX: sumas[1]!.x, balX: zos.x, top }
+  return { descX: pop.x, amountX: sumas[0]!.x, feeX: sumas[1]!.x, balX: zos ? zos.x : Number.POSITIVE_INFINITY, top }
 }
 
 const STOP = (t: string) => /^Poznámka/.test(t) || t.includes('info@slsp.sk')
@@ -77,7 +77,7 @@ function collectOps(pages: PdfPage[]): RawOp[] {
         else bal.push(s)
       }
       const dz = dateZone.join(' ')
-      const dm = /^(\d{2}\.\d{2}\.\d{4})\s+(\d{2}\.\d{2}\.\d{4})$/.exec(dz)
+      const dm = /^(\d{2}\.\d{2}\.\d{4})\s*(\d{2}\.\d{2}\.\d{4})$/.exec(dz)   // в части PDF обе даты слиты в одно слово: «01.07.202601.07.2026»
       if (dm) {
         const [v, b] = parseDates(`${dm[1]} ${dm[2]}`)
         cur = { valueDate: v!, bookingDate: b!, title: clean(desc.join(' ')), body: [], amount: am, fee, bal }
@@ -95,7 +95,7 @@ function collectOps(pages: PdfPage[]): RawOp[] {
 const CARD_LINE = /^Č\. k\. (\S+ \S+ \S+ \S+)\s*$/
 const IBAN_LINE = /^([A-Z]{2}\d{2}[\d ]*\d)\s+BIC:\s*([A-Z0-9]+)/
 const CARD_DT = /(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\s+(\d{1,2}:\d{2}(?::\d{2})?)\s*$/
-const LABEL_LINE = /^[\p{L} ]{3,40}:\s/u
+const LABEL_LINE = /^[\p{L} ]{2,40}:(\s|$)/u   // «VS: …», «SS: …», «Referencia platiteľa: …» начинают служебную часть
 
 function parseBody(title: string, body: string[]): { cp: StatementCounterparty; cardMask: string | null; time: string | null } {
   const ci = body.findIndex((b) => CARD_LINE.test(b))
@@ -166,15 +166,20 @@ export function parseSlspStatement(pages: PdfPage[]): ParsedStatement {
   }
 
   const key = hdr.number.slice(-4)
+  const hasBalance = cols.balX !== Number.POSITIVE_INFINITY
+  // Бизнес-счёт без колонки остатка: остаток после операции считается от начального; сверка по итогам шапки остаётся честной (сумма операций должна дать конечный остаток и итоги вкладов и выборов)
+  let running = parseSkAmount(hdr.opening)
   const rows: StatementRow[] = collectOps(pages).map((op, idx) => {
     const n = idx + 1
-    if (!op.amount.length || !op.bal.length) fail('STATEMENT_PARSE', `строка ${n}: не найдена сумма или остаток`, { n })
+    if (!op.amount.length || (hasBalance && !op.bal.length)) fail('STATEMENT_PARSE', `строка ${n}: не найдена сумма${hasBalance ? ' или остаток' : ''}`, { n })
     const { cp, cardMask, time } = parseBody(op.title, op.body)
+    const amountMinor = parseSkAmount(op.amount.join(' ')); const feeMinor = op.fee.length ? parseSkAmount(op.fee.join(' ')) : 0
+    running += amountMinor + feeMinor
     return {
       n, accountKey: key, valueDate: op.valueDate, bookingDate: op.bookingDate, time, title: op.title, counterparty: cp, cardMask,
       description: clean([op.title, ...op.body].join(' ')),
-      amountMinor: parseSkAmount(op.amount.join(' ')), feeMinor: op.fee.length ? parseSkAmount(op.fee.join(' ')) : 0,
-      balanceAfterMinor: parseSkAmount(op.bal.join(' ')), currency: hdr.currency,
+      amountMinor, feeMinor,
+      balanceAfterMinor: hasBalance ? parseSkAmount(op.bal.join(' ')) : running, currency: hdr.currency,
     }
   })
 
