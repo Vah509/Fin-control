@@ -19,6 +19,7 @@ import { DumpScreen } from './ui/screens/Dump'
 import { SettingsScreen } from './ui/screens/Settings'
 import { AccountsSettingsScreen } from './ui/screens/AccountsSettings'
 import { BaseCurrencyScreen } from './ui/screens/BaseCurrency'
+import { TagsScreen } from './ui/screens/Tags'
 import { EnterBalancesScreen } from './ui/screens/EnterBalances'
 import { HomeSettingsScreen } from './ui/screens/HomeSettings'
 import { AccountScreen } from './ui/screens/Account'
@@ -37,7 +38,7 @@ const TABS: { page: Page; label: string; icon: string }[] = [
 ]
 const TAB_OF: Record<Page, Page> = {
   home: 'home', balance: 'home', snapshot: 'snapshot', moves: 'more', statements: 'statements', statementNew: 'statements', statementTask: 'statements', statementProblems: 'statements', statementAccount: 'statements', accounts: 'accounts',
-  more: 'more', periods: 'more', dump: 'more', settings: 'more', baseCurrency: 'more', homeSettings: 'more', accountsSettings: 'more', enterBalances: 'more', account: 'accounts', newAccount: 'accounts', imports: 'more', importNew: 'more', importJob: 'more',
+  more: 'more', periods: 'more', dump: 'more', settings: 'more', baseCurrency: 'more', homeSettings: 'more', accountsSettings: 'more', enterBalances: 'more', account: 'accounts', newAccount: 'accounts', imports: 'more', importNew: 'more', importJob: 'more', tags: 'more',
 }
 
 /** Ярлыки PWA: /?go=snapshot и /?go=balance. */
@@ -164,6 +165,7 @@ export function Shell({ db, ctx, initialRef, email }: { db: SupabaseClient; ctx:
           {page === 'dump' && <DumpScreen />}
           {page === 'settings' && <SettingsScreen />}
           {page === 'baseCurrency' && <BaseCurrencyScreen />}
+          {page === 'tags' && <TagsScreen />}
           {page === 'homeSettings' && <HomeSettingsScreen />}
           {page === 'accountsSettings' && <AccountsSettingsScreen />}
           {page === 'enterBalances' && <EnterBalancesScreen />}
