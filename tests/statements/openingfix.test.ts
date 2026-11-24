@@ -53,13 +53,13 @@ describe('начальный остаток из выписки (шаг 5)', () 
     expect(adj).toMatchObject({ isOpening: false, amountMinor: 53000, type: 'adjustment' })
     expect(Date.parse(adj.bookedAt)).toBeGreaterThan(Date.parse('2026-09-30T23:59:59Z'))
   })
-  it('в пакете прежний остаток идёт раньше нового (уникальный индекс в Postgres)', async () => {
+  it('прежний остаток понижается отдельным пакетом раньше нового (Postgres вставляет новые строки раньше обновления)', async () => {
     const t = await prep([open('2026-10-15', 200000)])
     const orig = t.storage.applyBatch.bind(t.storage)
-    let order: boolean[] = []
-    t.storage.applyBatch = (async (b: { put?: { transactions?: Transaction[] } }) => { order = (b.put?.transactions ?? []).map((x) => x.isOpening); return orig(b as never) }) as never
-    await applyTaskOpeningFixes(t.ctx, t.task.id, ['0255'].length ? [(await planTaskOpeningFixes(t.ctx, t.task.id)).plans[0]!.accountKey] : [])
-    expect(order).toEqual([false, true])
+    const calls: boolean[][] = []
+    t.storage.applyBatch = (async (b: { put?: { transactions?: Transaction[] } }) => { calls.push((b.put?.transactions ?? []).map((x) => x.isOpening)); return orig(b as never) }) as never
+    await applyTaskOpeningFixes(t.ctx, t.task.id, [(await planTaskOpeningFixes(t.ctx, t.task.id)).plans[0]!.accountKey])
+    expect(calls).toEqual([[false], [true]])
   })
   it('старый остаток равен концу выписки: он удаляется, лишней корректировки нет', async () => {
     const t = await prep([open('2026-10-15', 147000)])

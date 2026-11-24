@@ -68,6 +68,7 @@ export async function applyOpeningFixes(ctx: CoreContext, st: ParsedStatement, c
   const accounts = await ctx.storage.list('accounts')
   const put: unknown[] = []
   const audit: ReturnType<typeof auditEntry>[] = []
+  const auditNew: ReturnType<typeof auditEntry>[] = []
   const newOpenings: unknown[] = []
   for (const p of chosen) {
     const acc = accounts.find((a) => a.id === p.accountId)!
@@ -77,7 +78,7 @@ export async function applyOpeningFixes(ctx: CoreContext, st: ParsedStatement, c
     }, acc).catch((e) => { throw e })
     const opening = { ...built, isOpening: true }
     newOpenings.push(opening)
-    audit.push(transactionAudit(ctx, 'opening_created', opening))
+    auditNew.push(transactionAudit(ctx, 'opening_created', opening))
     if (p.kind === 'move') {
       const old = (await ctx.storage.getTransaction(p.oldOpeningId!)) ?? fail('NOT_FOUND', 'прежний начальный остаток не найден')
       await assertUnlocked(ctx, acc, old.bookedAt)
@@ -91,11 +92,14 @@ export async function applyOpeningFixes(ctx: CoreContext, st: ParsedStatement, c
         await assertUnlocked(ctx, acc, at)
         next = { ...old, isOpening: false, amountMinor: p.gapMinor!, bookedAt: at, comment: 'Неучтённая разница между выписками', updatedAt: now }
       }
-      put.push(next) // прежний остаток раньше нового: в базе уникален один начальный на счёт (uq_transactions_opening), проверка по строкам
+      put.push(next)
       audit.push(transactionAudit(ctx, p.gapMinor === 0 ? 'opening_removed' : 'opening_to_adjustment', next, old))
     }
   }
-  put.push(...newOpenings)
-  await ctx.storage.applyBatch({ put: { transactions: put }, audit } as never)
+  // Два пакета подряд: apply_batch в Postgres сначала вставляет новые строки, потом обновляет старые, а начальный остаток
+  // на счёт уникален (uq_transactions_opening). Поэтому прежний остаток сначала понижается, потом вставляется новый.
+  // Если второй пакет упадёт, состояние остаётся целым (начального нет), повтор предложит «создать».
+  if (put.length > 0) await ctx.storage.applyBatch({ put: { transactions: put }, audit } as never)
+  await ctx.storage.applyBatch({ put: { transactions: newOpenings }, audit: auditNew } as never)
   return chosen.length
 }
