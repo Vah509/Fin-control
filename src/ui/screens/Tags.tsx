@@ -109,8 +109,10 @@ export function TagsScreen() {
               onSave={(name) => void act(() => renameTagGroup(ctx, x.group.id, name)).then((ok) => ok && setEditGroup(null))} />
           : (
             <>
-              <div className="row-main grow"><span className="row-title">{x.group.name}</span>{x.group.isService && <span className="row-sub">служебная</span>}</div>
-              {owner && !x.group.isService && <button className="btn small" aria-label="Переименовать группу" onClick={() => setEditGroup(x.group.id)}>✎</button>}
+              <h2>{x.group.name}{x.group.isService && <span className="row-sub"> служебная</span>}</h2>
+              {owner && !x.group.isService && (
+                <span className="ctl"><button className="btn small" aria-label="Переименовать группу" onClick={() => setEditGroup(x.group.id)}>✎</button></span>
+              )}
             </>
           )}
       </div>
@@ -126,14 +128,12 @@ export function TagsScreen() {
       {data.data && (
         <>
           <p className="muted">Перетаскивайте за ⠿ группы и теги внутри группы. Перенос тега в другую группу: ✎. Удалять нельзя, только в архив.{!owner && ' Менять может только владелец.'}</p>
-          <ul className="plain tag-groups">
-            {drag.order.map((id, i) => (
-              <li key={id} ref={drag.setEl(id)} className={`card${drag.dragging === id ? ' dragging' : ''}`} style={drag.itemStyle(id, i)}>
-                {block(byId.get(id)!, owner ? <span className="drag-handle" aria-label="Перетащить группу" role="button" {...drag.handleProps(id)}>⠿</span> : null)}
-              </li>
-            ))}
-            {service.map((x) => <li key={x.group.id} className="card">{block(x, null)}</li>)}
-          </ul>
+          {drag.order.map((id, i) => (
+            <div key={id} ref={drag.setEl(id)} className={`group${drag.dragging === id ? ' dragging' : ''}`} style={drag.itemStyle(id, i)}>
+              {block(byId.get(id)!, owner ? <span className="drag-handle" aria-label="Перетащить группу" role="button" {...drag.handleProps(id)}>⠿</span> : null)}
+            </div>
+          ))}
+          {service.map((x) => <div key={x.group.id} className="group">{block(x, null)}</div>)}
           {owner && (addingGroup
             ? <div className="card"><NameForm label="Новая группа" initial="" onCancel={() => setAddingGroup(false)}
                 onSave={(name) => void act(() => createTagGroup(ctx, { name })).then((ok) => ok && setAddingGroup(false))} /></div>
