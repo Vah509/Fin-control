@@ -6,6 +6,7 @@ import type { CoreContext } from '../context'
 import { fail } from '../errors'
 import { normalizeIdentifier } from '../identifiers'
 import { makeKey } from '../keys'
+import type { Tag, TagGroup } from '../../data/types'
 import { addDays } from '../time'
 import type { ParsedStatement } from './types'
 
@@ -20,9 +21,12 @@ export interface CpGroup {
 }
 
 /** Строка файла, прочитанная обратно. row = номер строки в Excel (для сообщений об ошибках). */
-export interface CpFileRow { row: number; text: string; resolved: string; newName: string; iban: string | null }
+export interface CpFileRow { row: number; text: string; resolved: string; newName: string; iban: string | null; /** «Группа › Тег» или просто имя тега; пусто = не менять */ tag?: string }
 
-export interface CpFileResult { created: number; identifiersAdded: number; reassigned: number; rowsLinked: number }
+export interface CpFileResult { created: number; identifiersAdded: number; reassigned: number; rowsLinked: number; tagsSet: number }
+
+/** Подпись тега в файле: «Группа › Тег». */
+export const tagLabel = (group: string, tag: string) => `${group} › ${tag}`
 
 const nameKey = (s: string) => s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase()
 const collapse = (s: string) => s.normalize('NFKC').trim().replace(/\s+/g, ' ')
@@ -95,6 +99,30 @@ export async function applyCounterpartyFile(ctx: CoreContext, rows: CpFileRow[])
   const byName = new Map<string, Counterparty[]>()
   for (const c of cps) byName.set(nameKey(c.name), [...(byName.get(nameKey(c.name)) ?? []), c])
 
+  const [tagGroups, allTags] = await Promise.all([ctx.storage.list('tagGroups'), ctx.storage.list('tags')])
+  const resolveTag = (label: string): { id: string } | { error: string } => {
+    const parts = label.split(/\s*[›>]\s*/)
+    let cand: Tag[]
+    if (parts.length >= 2) {
+      const g: TagGroup | undefined = tagGroups.find((x) => nameKey(x.name) === nameKey(parts[0]!))
+      cand = g ? allTags.filter((t) => t.groupId === g.id && nameKey(t.name) === nameKey(parts.slice(1).join(' › '))) : []
+    } else cand = allTags.filter((t) => nameKey(t.name) === nameKey(label))
+    const live = cand.filter((t) => !t.archivedAt)
+    if (live.length === 1) return { id: live[0]!.id }
+    if (live.length > 1) return { error: `тег «${label}» есть в нескольких группах: выберите из списка «Группа › Тег»` }
+    return { error: cand.length ? `тег «${label}» в архиве` : `тега «${label}» нет в списке (лист «Теги»)` }
+  }
+  const tagWanted = new Map<string, { tagId: string; row: number }>()
+  const wantTag = (r: CpFileRow, cpId: string) => {
+    const label = collapse(r.tag ?? '')
+    if (!label) return
+    const res = resolveTag(label)
+    if ('error' in res) { errors.push({ row: r.row, message: res.error }); return }
+    const prev = tagWanted.get(cpId)
+    if (prev && prev.tagId !== res.id) errors.push({ row: r.row, message: `у одного контрагента разные теги (строки ${prev.row} и ${r.row})` })
+    else tagWanted.set(cpId, { tagId: res.id, row: r.row })
+  }
+
   const errors: { row: number; message: string }[] = []
   const newCps = new Map<string, Counterparty>()
   const taken = new Set(cps.map((c) => c.key))
@@ -108,7 +136,7 @@ export async function applyCounterpartyFile(ctx: CoreContext, rows: CpFileRow[])
       const hit = byName.get(nameKey(resolved)) ?? []
       if (hit.length === 0) errors.push({ row: r.row, message: `«${resolved}» нет в справочнике (опечатка?)` })
       else if (hit.length > 1) errors.push({ row: r.row, message: `в справочнике несколько контрагентов «${resolved}»` })
-      else links.push({ row: r, cpId: hit[0]!.id })
+      else { links.push({ row: r, cpId: hit[0]!.id }); wantTag(r, hit[0]!.id) }
       continue
     }
     const name = collapse(r.newName) || text
@@ -123,6 +151,7 @@ export async function applyCounterpartyFile(ctx: CoreContext, rows: CpFileRow[])
       newCps.set(nameKey(name), c)
     }
     links.push({ row: r, cpId: c.id })
+    wantTag(r, c.id)
   }
   if (errors.length) {
     const shown = errors.slice(0, 5).map((e) => `строка ${e.row}: ${e.message}`).join('; ')
@@ -158,12 +187,20 @@ export async function applyCounterpartyFile(ctx: CoreContext, rows: CpFileRow[])
     }
   }
 
+  const updated: Counterparty[] = []
+  let tagsSet = 0
+  for (const [cpId, w] of tagWanted) {
+    const fresh = [...newCps.values()].find((c) => c.id === cpId)
+    if (fresh) { fresh.defaultTagId = w.tagId; tagsSet++; continue }
+    const old = cps.find((c) => c.id === cpId)
+    if (old && old.defaultTagId !== w.tagId) { updated.push({ ...old, defaultTagId: w.tagId }); tagsSet++ }
+  }
   const created = [...newCps.values()]
-  if (created.length || put.length) {
+  if (created.length || put.length || updated.length) {
     await ctx.storage.applyBatch({
-      put: { counterparties: created, counterpartyIdentifiers: put },
-      audit: [auditEntry(ctx, 'counterparty_file_loaded', { tableName: 'counterparties', details: { created: created.length, identifiersAdded: added, reassigned, rows: links.length } })],
+      put: { counterparties: [...created, ...updated], counterpartyIdentifiers: put },
+      audit: [auditEntry(ctx, 'counterparty_file_loaded', { tableName: 'counterparties', details: { created: created.length, identifiersAdded: added, reassigned, rows: links.length, tagsSet } })],
     })
   }
-  return { created: created.length, identifiersAdded: added, reassigned, rowsLinked: links.length }
+  return { created: created.length, identifiersAdded: added, reassigned, rowsLinked: links.length, tagsSet }
 }

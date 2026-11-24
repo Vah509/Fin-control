@@ -268,7 +268,7 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
     const r = await applyCounterpartyFile(ctx, await readCounterpartyWorkbook(xlsx.bytes.slice()))
     await recordCounterpartyUpload(ctx, task.id, xlsx.name, { ...r, rows: r.rowsLinked })
     bump()
-    return `Принято. Строк: ${r.rowsLinked}, новых контрагентов: ${r.created}, признаков добавлено: ${r.identifiersAdded}${r.reassigned ? `, переназначено: ${r.reassigned}` : ''}.`
+    return `Принято. Строк: ${r.rowsLinked}, новых контрагентов: ${r.created}, признаков добавлено: ${r.identifiersAdded}${r.tagsSet ? `, тегов проставлено: ${r.tagsSet}` : ''}${r.reassigned ? `, переназначено: ${r.reassigned}` : ''}.`
   })
   const skipCp = () => run(async () => { await confirmCounterpartiesRecognized(ctx, task.id); bump(); return 'Все контрагенты опознаны, переходим к шагу 4.' })
   const ready = !!state.counterpartiesLoaded && !!state.comparedAt && (state.problemsCount ?? 0) === 0 && !state.operationsDone
