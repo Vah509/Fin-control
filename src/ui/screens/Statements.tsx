@@ -1,6 +1,6 @@
 // Выписки: список задач, новая загрузка (шаг 1), страница задачи (шаги 2 и далее). Задачи хранятся в базе.
 import { useState } from 'react'
-import { compareTask, createStatementTask, deleteStatementTask, checkTaskBalances, finishStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, resolveProblem, taskAccountsStatus, identifyStatementAccount, confirmAccountsRecognized, confirmCounterpartiesRecognized, saveComparison, taskStatement, updateTaskState } from '../../core'
+import { compareTask, createStatementTask, deleteStatementTask, checkTaskBalances, planTaskOpeningFixes, applyTaskOpeningFixes, finishStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, resolveProblem, taskAccountsStatus, identifyStatementAccount, confirmAccountsRecognized, confirmCounterpartiesRecognized, saveComparison, taskStatement, updateTaskState } from '../../core'
 import type { ProblemAction, ProblemDetails } from '../../core'
 import {
   applyCounterpartyFile, buildCounterpartyWorkbook, counterpartyStatus, buildOperationsWorkbook, extractPdfPages, operationsFileName, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
@@ -273,6 +273,8 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
   const skipCp = () => run(async () => { await confirmCounterpartiesRecognized(ctx, task.id); bump(); return 'Все контрагенты опознаны, переходим к шагу 4.' })
   const ready = !!state.counterpartiesLoaded && !!state.comparedAt && (state.problemsCount ?? 0) === 0 && !state.operationsDone
   const bal = useLoad(() => (ready ? checkTaskBalances(ctx, task.id) : Promise.resolve(null)), [task.id, task.updatedAt, ready])
+  const fixes = useLoad(() => (ready && bal.data && !bal.data.ok ? planTaskOpeningFixes(ctx, task.id) : Promise.resolve(null)), [task.id, task.updatedAt, ready, bal.data])
+  const applyFix = (key: string) => run(async () => { await applyTaskOpeningFixes(ctx, task.id, [key]); bump(); bal.reload(); return 'Начальный остаток записан. Остатки проверены заново.' })
   const downloadOps = () => run(async () => {
     const name = operationsFileName(st)
     const cmp = await compareTask(ctx, task.id)
@@ -387,7 +389,20 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
                 <p>…{i.accountKey} {i.accountName} ({i.periodStart} — {i.periodEnd})</p>
                 <p className="muted">Начало: в базе {formatMinor(i.startDbMinor, 2)}, в выписке {formatMinor(i.startStmtMinor, 2)} {i.startOk ? '✓' : '✗'}</p>
                 <p className="muted">Конец: в базе после записи {formatMinor(i.endExpectedMinor, 2)}, в выписке {formatMinor(i.endStmtMinor, 2)} {i.endOk ? '✓' : '✗'} {i.currency}</p>
-                {!i.startOk && i.startDbMinor === 0 && <p className="muted">В базе нет начального остатка. Задайте остаток счёта на дату до начала периода (Счета, ввод остатка) и обновите проверку.</p>}
+                {!i.startOk && (() => {
+                  const p = fixes.data?.plans.find((x) => x.accountKey === i.accountKey)
+                  const b = fixes.data?.blocked.find((x) => x.accountKey === i.accountKey)
+                  if (p) return (
+                    <>
+                      <p className="muted">{p.kind === 'create'
+                        ? `Нет начального остатка. Будет создан: ${formatMinor(p.openingMinor, 2)} ${i.currency} на начало периода.`
+                        : `Есть более поздний начальный остаток ${formatMinor(p.oldOpeningMinor ?? 0, 2)}. Новый ${formatMinor(p.openingMinor, 2)} встанет на начало периода; прежний ${p.gapMinor === 0 ? 'удалится (движения его объясняют)' : `станет корректировкой на ${formatMinor(p.gapMinor ?? 0, 2)} (неучтённая разница)`}.`}</p>
+                      <button className="btn primary" disabled={busy} onClick={() => void applyFix(i.accountKey)}>{p.kind === 'create' ? 'Создать начальный остаток' : 'Передвинуть начальный остаток'}</button>
+                    </>
+                  )
+                  if (b) return <p className="muted">Начальный остаток не предлагается: {b.reason}.</p>
+                  return fixes.data ? <p className="muted">До начала периода в базе уже есть записи: остаток не сходится из-за пропуска или дубля. Проверьте предыдущие выписки.</p> : null
+                })()}
               </div>
             ))}
             {bal.data.ok

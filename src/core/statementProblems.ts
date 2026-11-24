@@ -11,6 +11,7 @@ import { readSettings } from './settings'
 import { getTask, recordCounterpartyUpload, taskStatement, type StatementTaskState } from './statementTasks'
 import { compareWithDb, type Comparison, type ProblemDetails } from './statements/compare'
 import { checkStatementBalances } from './statements/balances'
+import { applyOpeningFixes, planOpeningFixes, type OpeningFixResult } from './statements/openingFix'
 import { counterpartyStatus } from './statements/counterparties'
 import { reconcileAccount } from './statements/reconcile'
 import type { BalanceCheck } from './statements/balances'
@@ -87,6 +88,18 @@ export async function checkTaskBalances(ctx: CoreContext, taskId: string): Promi
   const t = await getTask(ctx, taskId)
   const st = taskStatement(t)
   return checkStatementBalances(ctx, st, await compareWithDb(ctx, st, decisionsOf(t)))
+}
+
+/** Шаг 5: предложения «создать/передвинуть начальный остаток» по счетам задачи. */
+export async function planTaskOpeningFixes(ctx: CoreContext, taskId: string): Promise<OpeningFixResult> {
+  const t = await getTask(ctx, taskId)
+  const st = taskStatement(t)
+  return planOpeningFixes(ctx, st, await compareWithDb(ctx, st, decisionsOf(t)))
+}
+export async function applyTaskOpeningFixes(ctx: CoreContext, taskId: string, accountKeys: string[]): Promise<number> {
+  const t = await getTask(ctx, taskId)
+  const st = taskStatement(t)
+  return applyOpeningFixes(ctx, st, await compareWithDb(ctx, st, decisionsOf(t)), accountKeys)
 }
 
 /** Шаг 2 без файла: все контрагенты выписки уже опознаны, сразу к шагу 3. Иначе отказ. */
