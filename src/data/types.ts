@@ -75,6 +75,15 @@ export interface BalanceCheckpoint {
   note: string | null; createdBy: string | null; createdAt: string
 }
 
+/** Период остатков (docs/ANCHORS.md): загруженная выписка или ручная фиксация. Остаток на начало и конец периода служат точками отсчёта расчёта.
+ *  Ручная фиксация: periodStart = periodEnd, openingMinor = closingMinor. В расчёте с версии 0.2.36 пока не участвует (шаг 5в). */
+export interface BalancePeriod {
+  id: string; accountId: string; periodStart: string; periodEnd: string
+  openingMinor: number; closingMinor: number
+  source: 'statement' | 'manual'; ref: string | null; status: 'active' | 'invalid'
+  note: string | null; createdBy: string | null; createdAt: string
+}
+
 export interface PeriodLock {
   id: string; seq: number; projectId: string | null; lockedThrough: string
   lockedAt: string; lockedBy: string | null; status: 'active' | 'released'
@@ -157,6 +166,7 @@ export interface EntityMap {
   counterpartyIdentifiers: CounterpartyIdentifier
   transactions: Transaction
   checkpoints: BalanceCheckpoint
+  balancePeriods: BalancePeriod
   periodLocks: PeriodLock
   fxRates: FxRate
   fxSourcePriorities: FxSourcePriority
@@ -171,7 +181,7 @@ export const PRIMARY_KEY: { [K in EntityName]: keyof EntityMap[K] & string } = {
   appSettings: 'key', planTypes: 'key', countries: 'key', currencies: 'key',
   institutions: 'id', projects: 'id', accounts: 'id', accountIdentifiers: 'id',
   tagGroups: 'id', tags: 'id', counterparties: 'id', counterpartyIdentifiers: 'id',
-  transactions: 'id', checkpoints: 'id', periodLocks: 'id', fxRates: 'id',
+  transactions: 'id', checkpoints: 'id', balancePeriods: 'id', periodLocks: 'id', fxRates: 'id',
   fxSourcePriorities: 'source', importJobs: 'id', statementTasks: 'id', statementProblems: 'id',
 }
 export const ENTITY_NAMES = Object.keys(PRIMARY_KEY) as EntityName[]

@@ -9,7 +9,7 @@ import type {
 export type SmallEntity =
   | 'appSettings' | 'planTypes' | 'countries' | 'currencies' | 'institutions' | 'projects'
   | 'accounts' | 'tagGroups' | 'tags' | 'counterparties' | 'counterpartyIdentifiers'
-  | 'fxSourcePriorities' | 'importJobs' | 'statementTasks' | 'statementProblems'
+  | 'fxSourcePriorities' | 'importJobs' | 'statementTasks' | 'statementProblems' | 'balancePeriods'
 
 export interface TransactionQuery {
   accountId?: string

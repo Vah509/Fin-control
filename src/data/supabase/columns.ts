@@ -69,6 +69,12 @@ export const SPECS: { [K in EntityName]: Spec } = {
     f('balanceMinor', 'balance', { money: 'accountCurrency' }), f('kind', 'kind'), f('source', 'source'),
     f('status', 'status'), f('note', 'note'), f('createdBy', 'created_by'), f('createdAt', 'created_at', 'ts'),
   ] },
+  balancePeriods: { table: 'balance_periods', pk: 'id', fields: [
+    f('id', 'id'), f('accountId', 'account_id'), f('periodStart', 'period_start'), f('periodEnd', 'period_end'),
+    f('openingMinor', 'opening_balance', { money: 'accountCurrency' }), f('closingMinor', 'closing_balance', { money: 'accountCurrency' }),
+    f('source', 'source'), f('ref', 'ref'), f('status', 'status'), f('note', 'note'),
+    f('createdBy', 'created_by'), f('createdAt', 'created_at', 'ts'),
+  ] },
   periodLocks: { table: 'period_locks', pk: 'id', fields: [
     f('id', 'id'), f('seq', 'seq', 'int'), f('projectId', 'project_id'), f('lockedThrough', 'locked_through'),
     f('lockedAt', 'locked_at', 'ts'), f('lockedBy', 'locked_by'), f('status', 'status'),
@@ -97,7 +103,7 @@ export const SPECS: { [K in EntityName]: Spec } = {
 /** Порядок записи в пакете: родители раньше детей (тот же порядок в SQL-функции apply_batch). */
 export const WRITE_ORDER: EntityName[] = [
   'appSettings', 'planTypes', 'countries', 'currencies', 'institutions', 'projects', 'accounts', 'accountIdentifiers',
-  'tagGroups', 'tags', 'counterparties', 'counterpartyIdentifiers', 'transactions', 'checkpoints', 'periodLocks',
+  'tagGroups', 'tags', 'counterparties', 'counterpartyIdentifiers', 'transactions', 'checkpoints', 'balancePeriods', 'periodLocks',
   'fxRates', 'fxSourcePriorities', 'importJobs', 'statementTasks', 'statementProblems',
 ]
 

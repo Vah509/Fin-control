@@ -94,4 +94,15 @@ describe('слой Supabase: преобразование колонок', () =>
     expect(r['task_id']).toBe('t')
     expect(fromRow('statementProblems', r, env)).toEqual(p)
   })
+
+  it('balancePeriods: имена колонок и деньги (шаг 5б, 0.2.36)', () => {
+    const b = {
+      id: 'b', accountId: 'a1', periodStart: '2026-07-01', periodEnd: '2026-07-31', openingMinor: 119944, closingMinor: 416896,
+      source: 'statement' as const, ref: 'hash', status: 'active' as const, note: null, createdBy: null, createdAt: '2026-11-26T10:00:00.000Z',
+    }
+    const r = toRow('balancePeriods', b, env)
+    expect(r['period_start']).toBe('2026-07-01')
+    expect(r['opening_balance']).toBe('1199.44')
+    expect(fromRow('balancePeriods', r, env)).toEqual(b)
+  })
 })
