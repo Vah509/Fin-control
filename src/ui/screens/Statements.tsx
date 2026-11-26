@@ -1,5 +1,6 @@
 // Выписки: список задач, новая загрузка (шаг 1), страница задачи (шаги 2 и далее). Задачи хранятся в базе.
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { compareTask, createStatementTask, deleteStatementTask, checkTaskBalances, planTaskOpeningFixes, applyTaskOpeningFixes, finishStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, resolveProblem, taskAccountsStatus, identifyStatementAccount, confirmAccountsRecognized, confirmCounterpartiesRecognized, saveComparison, taskStatement, updateTaskState } from '../../core'
 import type { ProblemAction, ProblemDetails } from '../../core'
 import {
@@ -238,24 +239,71 @@ export function StatementProblemsScreen({ taskId }: { taskId: string }) {
   )
 }
 
+type StepStatus = 'done' | 'current' | 'future'
+
+/** Шаг-аккордеон: заголовок из двух строк (название, результат), ⓘ со справкой, тело раскрывается нажатием. Будущие шаги нейтральные и не раскрываются. */
+function Step({ title, summary, status, open, onToggle, info, children }: {
+  title: string; summary: string; status: StepStatus; open: boolean; onToggle: () => void; info?: string; children?: ReactNode
+}) {
+  const [help, setHelp] = useState(false)
+  const expandable = status !== 'future'
+  return (
+    <div className={`acc ${status}`}>
+      <div className="acc-head">
+        <button type="button" className="acc-main" disabled={!expandable} onClick={onToggle} aria-expanded={open}>
+          <span className="acc-mark">{status === 'done' ? '✓' : status === 'current' ? '→' : '○'}</span>
+          <span className="acc-text"><span className="acc-title">{title}</span><span className="acc-sum">{summary}</span></span>
+          {expandable && <span className="acc-chev">{open ? '▾' : '▸'}</span>}
+        </button>
+        {info && expandable && <button type="button" className="acc-info" aria-label="Справка" aria-expanded={help} onClick={() => setHelp(!help)}>ⓘ</button>}
+      </div>
+      {info && help && expandable && <div className="acc-help">{info}</div>}
+      {open && expandable && <div className="acc-body">{children}</div>}
+    </div>
+  )
+}
+
 function TaskView({ task, reload }: { task: StatementTask; reload: () => void }) {
   const { ctx, go, bump } = useApp()
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<Msg>(null)
   const [xlsx, setXlsx] = useState<Picked | null>(null)
+  const [openMap, setOpenMap] = useState<Record<number, boolean>>({})
+  const auto = useRef<Set<string>>(new Set())
   const st = taskStatement(task)
   const state = task.state as StatementTaskState
   const accs = useLoad(() => taskAccountsStatus(ctx, task.id), [task.id, task.updatedAt])
-  const allAccountsKnown = !!accs.data && accs.data.every((x) => x.account)
+  const allAccountsKnown = !!accs.data && accs.data.length > 0 && accs.data.every((x) => x.account)
   const accountsPassed = !!state.accountsConfirmed || !!state.counterpartiesLoaded
-  const skipAcc = () => run(async () => { await confirmAccountsRecognized(ctx, task.id); bump(); return 'Счета опознаны.' })
   const cps = useLoad(() => counterpartyStatus(ctx, st), [task.id, task.updatedAt])
   const allKnown = !!cps.data && cps.data.unrecognized.length === 0
+  const problems = state.problemsCount ?? 0
+  const compared = !!state.comparedAt
+  const closed = !!state.operationsDone
+  const ready = !!state.counterpartiesLoaded && compared && problems === 0 && !closed
 
   async function run(fn: () => Promise<string>) {
     setBusy(true); setMsg(null)
     try { setMsg({ kind: 'ok', text: await fn() }); reload() } catch (e) { setMsg({ kind: 'error', text: errorText(e) }) } finally { setBusy(false) }
   }
+
+  // Автопереходы: счета опознаны → шаг 3; контрагенты опознаны → шаг 4; на шаге 4 сравнение с базой идёт само (файл скачивается по кнопке).
+  useEffect(() => {
+    if (busy || closed || task.status === 'done') return
+    const once = (k: string, fn: () => Promise<void>) => {
+      if (auto.current.has(k)) return
+      auto.current.add(k)
+      setBusy(true)
+      void fn().then(() => { bump(); reload() }).catch((e) => setMsg({ kind: 'error', text: errorText(e) })).finally(() => setBusy(false))
+    }
+    if (!accountsPassed) { if (allAccountsKnown) once('acc', async () => { await confirmAccountsRecognized(ctx, task.id) }) }
+    else if (!state.counterpartiesLoaded) { if (allKnown) once('cp', async () => { await confirmCounterpartiesRecognized(ctx, task.id) }) }
+    else if (!compared) once('cmp', async () => { await saveComparison(ctx, task.id, await compareTask(ctx, task.id)) })
+  }, [busy, closed, task.status, accountsPassed, allAccountsKnown, allKnown, state.counterpartiesLoaded, compared, ctx, task.id, bump, reload])
+
+  const bal = useLoad(() => (ready ? checkTaskBalances(ctx, task.id) : Promise.resolve(null)), [task.id, task.updatedAt, ready])
+  const fixes = useLoad(() => (ready && bal.data && !bal.data.ok ? planTaskOpeningFixes(ctx, task.id) : Promise.resolve(null)), [task.id, task.updatedAt, ready, bal.data])
+  const applyFix = (key: string) => run(async () => { await applyTaskOpeningFixes(ctx, task.id, [key]); bump(); bal.reload(); return 'Начальный остаток записан. Остатки проверены заново.' })
   const download = () => run(async () => {
     const a = st.accounts[0]!
     const name = `kontragenty_${a.periodEnd.slice(0, 7)}.xlsx`
@@ -270,11 +318,6 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
     bump()
     return `Принято. Строк: ${r.rowsLinked}, новых контрагентов: ${r.created}, признаков добавлено: ${r.identifiersAdded}${r.tagsSet ? `, тегов проставлено: ${r.tagsSet}` : ''}${r.reassigned ? `, переназначено: ${r.reassigned}` : ''}.`
   })
-  const skipCp = () => run(async () => { await confirmCounterpartiesRecognized(ctx, task.id); bump(); return 'Все контрагенты опознаны, переходим к шагу 4.' })
-  const ready = !!state.counterpartiesLoaded && !!state.comparedAt && (state.problemsCount ?? 0) === 0 && !state.operationsDone
-  const bal = useLoad(() => (ready ? checkTaskBalances(ctx, task.id) : Promise.resolve(null)), [task.id, task.updatedAt, ready])
-  const fixes = useLoad(() => (ready && bal.data && !bal.data.ok ? planTaskOpeningFixes(ctx, task.id) : Promise.resolve(null)), [task.id, task.updatedAt, ready, bal.data])
-  const applyFix = (key: string) => run(async () => { await applyTaskOpeningFixes(ctx, task.id, [key]); bump(); bal.reload(); return 'Начальный остаток записан. Остатки проверены заново.' })
   const downloadOps = () => run(async () => {
     const name = operationsFileName(st)
     const cmp = await compareTask(ctx, task.id)
@@ -283,33 +326,60 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
     bump()
     return `Файл создан: ${name}. Проблем: ${cmp.problems.length}.`
   })
-  const finish = () => run(async () => { const r = await finishStatementTask(ctx, task.id); bump(); return `Записано операций в базу: ${r.written}. Задача закрыта.` })
+  const finish = () => run(async () => {
+    const r = await finishStatementTask(ctx, task.id); bump()
+    return r.written === 0 ? 'Задача закрыта, новых записей нет.' : `Записано операций в базу: ${r.written}. Задача закрыта.`
+  })
   async function remove() {
     if (!window.confirm('Удалить задачу? Разобранные данные будут стёрты. Уже записанные контрагенты останутся.')) return
     setBusy(true)
     try { await deleteStatementTask(ctx, task.id); bump(); go('statements') } catch (e) { setMsg({ kind: 'error', text: errorText(e) }); setBusy(false) }
   }
 
+  // статусы шагов
+  const s2: StepStatus = accountsPassed ? 'done' : 'current'
+  const s3: StepStatus = state.counterpartiesLoaded ? 'done' : accountsPassed ? 'current' : 'future'
+  const s4: StepStatus = closed || (compared && problems === 0) ? 'done' : state.counterpartiesLoaded ? 'current' : 'future'
+  const s5: StepStatus = closed ? 'done' : ready ? 'current' : 'future'
+  const isOpen = (n: number, s: StepStatus) => openMap[n] ?? s === 'current'
+  const toggle = (n: number, s: StepStatus) => setOpenMap({ ...openMap, [n]: !isOpen(n, s) })
+
+  const recs = st.accounts.map((a) => reconcileAccount(a))
+  const opsTotal = st.accounts.reduce((n, a) => n + a.rows.length, 0)
+  const s1sum = `${opsTotal} операций · ${recs.every((r) => r.ok) ? 'сверка сошлась' : 'НЕ СОШЛОСЬ'}`
+  const s2sum = s2 === 'done' || allAccountsKnown
+    ? (accs.data ?? []).map((x) => `…${x.key} ${x.account ? x.account.name : 'неопознан'}`).join('; ') || 'Счета опознаны'
+    : 'Нужно опознать счёт'
+  const s3sum = s3 === 'future' ? 'Ожидает шага 2'
+    : cps.data ? `Контрагентов ${cps.data.total} · опознано ${cps.data.recognized}${state.counterpartiesTotals?.created ? ` · новых ${state.counterpartiesTotals.created}` : ''}${cps.data.unrecognized.length ? ` · не опознано ${cps.data.unrecognized.length}` : ''}` : 'Проверяю…'
+  const nowrite = state.newCount === 0
+  const s4sum = s4 === 'future' ? 'Ожидает шага 3'
+    : !compared ? 'Сравниваю с базой…'
+    : problems > 0 ? `Проблем: ${problems}. Нужно решить`
+    : closed || state.newCount === undefined ? 'Проблем нет'
+    : nowrite ? 'Операции уже записаны в базе, новых записей: 0'
+    : `Проблем нет · новых записей: ${state.newCount}, уже в базе: ${state.inDbCount ?? 0}`
+  const s5sum = s5 === 'done' ? `Задача закрыта, записано операций: ${state.writtenCount ?? 0}`
+    : s5 === 'future' ? 'Ожидает шага 4'
+    : !bal.data ? 'Проверяю остатки…'
+    : !bal.data.ok ? 'Остатки не сходятся. Запись заблокирована'
+    : bal.data.newCount === 0 ? 'Остатки сходятся. Операции уже в базе, новых 0' : `Остатки сходятся. К записи: ${bal.data.newCount}`
+
   return (
     <>
       <p><b>{task.title}</b></p>
-      <div className="card">
-        <p>✓ Шаг 1. Файл разобран</p>
+      <Step title="Шаг 1. Файл разобран" summary={s1sum} status="done" open={isOpen(1, 'done')} onToggle={() => toggle(1, 'done')}>
         <p className="muted">Файл: {task.fileName} · {dateTimeRu(task.createdAt)}</p>
-        {st.accounts.map((a) => {
-          const rec = reconcileAccount(a)
-          return (
-            <div key={a.key}>
-              <p>{a.title} …{a.key} · {a.currency} · {dateRu(a.periodStart)} — {dateRu(a.periodEnd)}, операций: {a.rows.length}</p>
-              <p className="muted">Остаток: {formatMinor(a.openingMinor, 2)} → {formatMinor(a.closingMinor, 2)}</p>
-              {rec.ok ? <Notice kind="ok">Сверка сошлась до копейки.</Notice>
-                : <Notice kind="warn">НЕ СОШЛОСЬ{rec.firstBadRow ? `: первая строка ${rec.firstBadRow}` : ''}. Строк с расхождением: {rec.badRows.length}.</Notice>}
-            </div>
-          )
-        })}
-      </div>
-      <div className="card">
-        <p>{accountsPassed ? '\u2713' : '\u2192'} Шаг 2. Опознание счёта</p>
+        {st.accounts.map((a, i) => (
+          <div key={a.key}>
+            <p>{a.title} …{a.key} · {a.currency} · {dateRu(a.periodStart)} — {dateRu(a.periodEnd)}, операций: {a.rows.length}</p>
+            <p className="muted">Остаток: {formatMinor(a.openingMinor, 2)} → {formatMinor(a.closingMinor, 2)}</p>
+            {recs[i]!.ok ? <Notice kind="ok">Сверка сошлась до копейки.</Notice>
+              : <Notice kind="warn">НЕ СОШЛОСЬ{recs[i]!.firstBadRow ? `: первая строка ${recs[i]!.firstBadRow}` : ''}. Строк с расхождением: {recs[i]!.badRows.length}.</Notice>}
+          </div>
+        ))}
+      </Step>
+      <Step title="Шаг 2. Опознание счёта" summary={s2sum} status={s2} open={isOpen(2, s2)} onToggle={() => toggle(2, s2)}>
         {accs.loading && <p className="muted">Проверяю…</p>}
         {accs.error && <ErrorBox text={accs.error} onRetry={accs.reload} />}
         {accs.data && accs.data.map((x) => (
@@ -318,68 +388,38 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
         {!accountsPassed && accs.data && !allAccountsKnown && (
           <button className="btn primary" disabled={busy} onClick={() => go('statementAccount', { accountId: task.id })}>Опознать счёт</button>
         )}
-        {!accountsPassed && allAccountsKnown && <button className="btn primary" disabled={busy} onClick={() => void skipAcc()}>Следующий шаг</button>}
-      </div>
-      <div className="card">
-        <p>{state.counterpartiesLoaded ? '✓' : '→'} Шаг 3. Контрагенты</p>
-        {!accountsPassed && <p className="muted">Станет доступен после шага 2.</p>}
-        {accountsPassed && (
-<>
-        {state.counterpartiesLoaded && state.counterpartiesTotals && (
+      </Step>
+      <Step title="Шаг 3. Контрагенты" summary={s3sum} status={s3} open={isOpen(3, s3)} onToggle={() => toggle(3, s3)}
+        info="Скачайте файл, впишите во 2-ю колонку имена из справочника (пусто = новый контрагент), загрузите обратно. Если в файле ошибка, ничего не записывается. Если все опознаны, файл не обязателен: шаг пройдёт сам, файл можно скачать для проверки, пока задача не удалена.">
+        {state.counterpartiesLoaded && state.counterpartiesTotals && state.counterpartiesFile && (
           <Notice kind="ok">
-            Загружен файл {state.counterpartiesFile}{state.counterpartiesAt ? ` (${dateTimeRu(state.counterpartiesAt)})` : ''}. Результат: новых контрагентов {state.counterpartiesTotals.created}, признаков добавлено {state.counterpartiesTotals.identifiersAdded}{state.counterpartiesTotals.reassigned ? `, переназначено ${state.counterpartiesTotals.reassigned}` : ''}.
+            Загружен файл {state.counterpartiesFile}{state.counterpartiesAt ? ` (${dateTimeRu(state.counterpartiesAt)})` : ''}. Новых контрагентов {state.counterpartiesTotals.created}, признаков добавлено {state.counterpartiesTotals.identifiersAdded}{state.counterpartiesTotals.reassigned ? `, переназначено ${state.counterpartiesTotals.reassigned}` : ''}.
           </Notice>
         )}
-        {cps.data && (
-          <p>Контрагентов в выписке: {cps.data.total} · опознано: {cps.data.recognized} · не опознано: {cps.data.unrecognized.length}</p>
-        )}
+        {cps.data && <p>Контрагентов в выписке: {cps.data.total} · опознано: {cps.data.recognized} · не опознано: {cps.data.unrecognized.length}</p>}
         {cps.data && cps.data.unrecognized.length > 0 && (
           <p className="muted">Не опознаны: {cps.data.unrecognized.slice(0, 5).map((g) => g.text).join('; ')}{cps.data.unrecognized.length > 5 ? ` и ещё ${cps.data.unrecognized.length - 5}` : ''}</p>
         )}
-        {!state.counterpartiesLoaded && allKnown && (
-          <>
-            <Notice kind="ok">Все контрагенты опознаны, файл не обязателен.</Notice>
-            <button className="btn primary" disabled={busy} onClick={() => void skipCp()}>Продолжить к шагу 4</button>
-            <button className="btn" disabled={busy} onClick={() => void download()}>Скачать файл контрагентов для проверки</button>
-          </>
+        {!state.counterpartiesLoaded && state.counterpartyFileDownloaded && !allKnown && <p className="muted">Файл уже скачан. Правьте его и загрузите ниже.</p>}
+        <button className={allKnown ? 'btn' : 'btn primary'} disabled={busy} onClick={() => void download()}>Скачать файл контрагентов</button>
+        <input type="file" accept=".xlsx" disabled={busy}
+          onChange={(e) => { setMsg(null); void readPicked(e.target.files?.[0]).then(setXlsx).catch((x) => setMsg({ kind: 'error', text: errorText(x) })) }} />
+        {xlsx && <p className="muted">Выбран: {xlsx.name}</p>}
+        <button className="btn primary" disabled={busy || !xlsx} onClick={() => void upload()}>Загрузить правленый файл</button>
+      </Step>
+      <Step title="Шаг 4. Операции + сверка" summary={s4sum} status={s4} open={isOpen(4, s4)} onToggle={() => toggle(4, s4)}
+        info="Приложение сравнивает выписку с операциями в базе за период выписки. Нормально: операции нет в базе (будет записана) или она есть и там и там. Проблемы (запись блокируется, пока они есть): операция есть в базе, а в выписке нет; счёта выписки нет в базе; перевод на свой счёт, для которого нельзя создать пару (другая валюта, счёт не привязан). Запись в базу выполняется на шаге 5 после сверки остатков. В файле плюсы в колонках «В выписке» и «В базе».">
+        {compared && state.newCount === 0 && problems === 0 && <Notice kind="ok">Операции уже записаны в базе, новых записей: 0.</Notice>}
+        {compared && !closed && problems === 0 && (state.newCount ?? 0) > 0 && <Notice kind="ok">Проблем нет. Новых записей: {state.newCount}, уже в базе: {state.inDbCount ?? 0}.</Notice>}
+        {compared && (state.missingAccounts?.length ?? 0) > 0 && (
+          <Notice kind="warn">Нет в базе (или признак счёта неоднозначен): …{state.missingAccounts!.join(', …')}. По ним сравнения не было, «В базе» пусто.</Notice>
         )}
-        {!(allKnown && !state.counterpartiesLoaded) && (
-          <>
-            {!state.counterpartiesLoaded && state.counterpartyFileDownloaded && <p className="muted">Файл контрагентов уже скачан. Теперь правьте его и загрузите ниже.</p>}
-            <p className="muted">{state.counterpartiesLoaded ? 'Если нужно что-то поправить, скачайте файл ещё раз и загрузите снова.' : 'Скачайте файл, впишите во 2-ю колонку имена из справочника (пусто = новый контрагент), загрузите обратно. Если в файле ошибка, ничего не записывается.'}</p>
-            <button className="btn primary" disabled={busy} onClick={() => void download()}>Скачать файл контрагентов</button>
-            <input type="file" accept=".xlsx" disabled={busy}
-              onChange={(e) => { setMsg(null); void readPicked(e.target.files?.[0]).then(setXlsx).catch((x) => setMsg({ kind: 'error', text: errorText(x) })) }} />
-            {xlsx && <p className="muted">Выбран: {xlsx.name}</p>}
-            <button className="btn primary" disabled={busy || !xlsx} onClick={() => void upload()}>Загрузить правленый файл</button>
-          </>
-        )}
-        </>
-        )}
-      </div>
-      <div className="card">
-        <p className={state.counterpartiesLoaded ? '' : 'muted'}>{state.operationsDone ? '✓' : state.counterpartiesLoaded ? '→' : '○'} Шаг 4. Файл «Операции + Сверка»</p>
-        {!state.counterpartiesLoaded && <p className="muted">Станет доступен после шага 3.</p>}
-        {state.counterpartiesLoaded && (
-          <>
-            <p className="muted">Приложение сравнит выписку с операциями в базе за период выписки. Нормально: операции нет в базе (будет записана) или она есть и там и там. Проблемы (запись блокируется, пока их нет): операция есть в базе, а в выписке нет; счёта выписки нет в базе; перевод на свой счёт, для которого нельзя создать пару (другая валюта, счёт не привязан). Запись в базу выполняется на шаге 5 после сверки остатков. В файле плюсы в колонках «В выписке» и «В базе».</p>
-            {state.comparedAt && (state.missingAccounts?.length ?? 0) > 0 && (
-              <Notice kind="warn">Нет в базе (или признак счёта неоднозначен): …{state.missingAccounts!.join(', …')}. По ним сравнения не было, «В базе» пусто.</Notice>
-            )}
-            {state.comparedAt && !state.operationsDone && (state.problemsCount ?? 0) === 0 && <Notice kind="ok">Проблем нет. Переходите к шагу 5.</Notice>}
-            {state.comparedAt && !state.operationsDone && (state.problemsCount ?? 0) > 0 && <Notice kind="warn">Проблем: {state.problemsCount}. Откройте «Проблемы».</Notice>}
-            {state.operationsDone && <Notice kind="ok">Задача закрыта{state.writtenCount !== undefined ? `, записано операций: ${state.writtenCount}` : ''}.</Notice>}
-            <button className="btn primary" disabled={busy} onClick={() => void downloadOps()}>{state.comparedAt ? 'Сравнить и скачать файл ещё раз' : 'Сравнить с базой и скачать файл'}</button>
-            {!state.operationsDone && state.comparedAt && (state.problemsCount ?? 0) > 0 && (
-              <button className="btn" disabled={busy} onClick={() => go('statementProblems', { accountId: task.id })}>Проблемы ({state.problemsCount})</button>
-            )}
-          </>
-        )}
-      </div>
-      <div className="card">
-        <p className={ready || state.operationsDone ? '' : 'muted'}>{state.operationsDone ? '✓' : ready ? '→' : '○'} Шаг 5. Сверка остатков и запись</p>
-        {state.operationsDone && <Notice kind="ok">Задача закрыта{state.writtenCount !== undefined ? `, записано операций: ${state.writtenCount}` : ''}. Задачу можно удалить, записанные данные останутся.</Notice>}
-        {!state.operationsDone && !ready && <p className="muted">Станет доступен, когда в шаге 4 не будет проблем.</p>}
+        {!closed && problems > 0 && <Notice kind="warn">Проблем: {problems}. Откройте «Проблемы».</Notice>}
+        {!closed && problems > 0 && <button className="btn primary" disabled={busy} onClick={() => go('statementProblems', { accountId: task.id })}>Проблемы ({problems})</button>}
+        <button className="btn" disabled={busy} onClick={() => void downloadOps()}>{compared ? 'Сравнить заново и скачать файл' : 'Сравнить с базой и скачать файл'}</button>
+      </Step>
+      <Step title="Шаг 5. Сверка остатков и запись" summary={s5sum} status={s5} open={isOpen(5, s5)} onToggle={() => toggle(5, s5)}>
+        {closed && <Notice kind="ok">Задача закрыта{state.writtenCount !== undefined ? `, записано операций: ${state.writtenCount}` : ''}. Задачу можно удалить, записанные данные останутся.</Notice>}
         {ready && bal.loading && <p className="muted">Считаю остатки…</p>}
         {ready && bal.error && <ErrorBox text={bal.error} onRetry={bal.reload} />}
         {ready && bal.data && (
@@ -408,11 +448,12 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
             {bal.data.ok
               ? <Notice kind="ok">Остатки сходятся.</Notice>
               : <Notice kind="warn">Остатки не сходятся. Запись заблокирована.</Notice>}
+            {bal.data.ok && bal.data.newCount === 0 && <Notice kind="ok">Операции уже записаны в базе, новых записей: 0.</Notice>}
             <button className="btn" disabled={busy} onClick={() => bal.reload()}>Проверить остатки ещё раз</button>
-            <button className="btn primary" disabled={busy || !bal.data.ok} onClick={() => void finish()}>Записать и закрыть задачу</button>
+            <button className="btn primary" disabled={busy || !bal.data.ok} onClick={() => void finish()}>{bal.data.newCount === 0 ? 'Закрыть задачу' : `Записать (${bal.data.newCount})`}</button>
           </>
         )}
-      </div>
+      </Step>
       {busy && <p className="muted">Подождите…</p>}
       {msg && <Notice kind={msg.kind === 'ok' ? 'ok' : 'warn'}>{msg.text}</Notice>}
       <button className="btn" disabled={busy} onClick={() => void remove()}>Удалить задачу</button>

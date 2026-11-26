@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { finishStatementTask, listTaskProblems, saveComparison, recordCounterpartyUpload, createStatementTask, deleteStatementTask, listStatementTasks, maskStatement, taskStatement, updateTaskState } from '../src/core'
+import { countComparison, finishStatementTask, listTaskProblems, saveComparison, recordCounterpartyUpload, createStatementTask, deleteStatementTask, listStatementTasks, maskStatement, taskStatement, updateTaskState } from '../src/core'
 import { applyCounterpartyFile, buildCounterpartyWorkbook, parseSlspStatement, readCounterpartyWorkbook } from '../src/core/statements'
 import { setup } from './helpers'
 import { buildSlsp } from './statements/slspFixture'
@@ -74,5 +74,14 @@ describe('задачи выписок', () => {
     await saveComparison(ctx, task.id, { problems: [{ kind: 'db_only', transactionId: 't1', details: { ...item } }], inDb: {}, dbOnly: [item], missingAccounts: [], plain: [] })
     await deleteStatementTask(ctx, task.id)
     expect(await storage.list('statementProblems')).toHaveLength(0)
+  })
+
+  it('сравнение запоминает, сколько операций новых и сколько уже в базе (0.2.33)', async () => {
+    const { ctx } = await setup({ withCrypto: true })
+    const task = await createStatementTask(ctx, stmt(), 'a.pdf')
+    const cmp = { problems: [], inDb: { a: true, b: true, c: false }, dbOnly: [], missingAccounts: [], plain: [] }
+    expect(countComparison(cmp)).toEqual({ newCount: 1, inDbCount: 2 })
+    await saveComparison(ctx, task.id, cmp)
+    expect((await listStatementTasks(ctx))[0]!.state).toMatchObject({ newCount: 1, inDbCount: 2, problemsCount: 0 })
   })
 })

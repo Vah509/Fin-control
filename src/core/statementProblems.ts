@@ -36,13 +36,19 @@ export async function listTaskProblems(ctx: CoreContext, taskId: string): Promis
 }
 
 /** Сохраняет результат сравнения: проблемы задачи заменяются новыми, состояние задачи обновляется одним пакетом. */
+/** Сколько операций выписки уже есть в базе и сколько будет записано (строки и комиссии). */
+export function countComparison(cmp: Comparison): { newCount: number; inDbCount: number } {
+  const v = Object.values(cmp.inDb)
+  return { newCount: v.filter((x) => !x).length, inDbCount: v.filter((x) => x).length }
+}
+
 export async function saveComparison(ctx: CoreContext, taskId: string, cmp: Comparison): Promise<StatementTask> {
   const t = await getTask(ctx, taskId)
   const now = ctx.now().toISOString()
   const problems: StatementProblem[] = cmp.problems.map((p) => ({
     id: ctx.newId(), taskId, kind: p.kind, status: 'open', transactionId: p.transactionId, createdAt: now, details: p.details as unknown as Json,
   }))
-  const state: StatementTaskState = { ...(t.state as StatementTaskState), operationsFileDownloaded: true, comparedAt: now, problemsCount: problems.length, missingAccounts: cmp.missingAccounts }
+  const state: StatementTaskState = { ...(t.state as StatementTaskState), operationsFileDownloaded: true, comparedAt: now, problemsCount: problems.length, missingAccounts: cmp.missingAccounts, ...countComparison(cmp) }
   const next: StatementTask = { ...t, state: state as Json, updatedAt: now }
   await ctx.storage.applyBatch({
     deleteProblemTaskIds: [taskId],
@@ -84,10 +90,11 @@ export async function finishStatementTask(ctx: CoreContext, taskId: string): Pro
 }
 
 /** Проверка остатков задачи (шаг 4): считается заново при каждом вызове. */
-export async function checkTaskBalances(ctx: CoreContext, taskId: string): Promise<BalanceCheck> {
+export async function checkTaskBalances(ctx: CoreContext, taskId: string): Promise<BalanceCheck & { newCount: number; inDbCount: number }> {
   const t = await getTask(ctx, taskId)
   const st = taskStatement(t)
-  return checkStatementBalances(ctx, st, await compareWithDb(ctx, st, decisionsOf(t)))
+  const cmp = await compareWithDb(ctx, st, decisionsOf(t))
+  return { ...(await checkStatementBalances(ctx, st, cmp)), ...countComparison(cmp) }
 }
 
 /** Шаг 5: предложения «создать/передвинуть начальный остаток» по счетам задачи. */
