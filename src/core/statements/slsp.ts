@@ -94,6 +94,8 @@ function collectOps(pages: PdfPage[]): RawOp[] {
 
 const CARD_LINE = /^Č\. k\. (\S+ \S+ \S+ \S+)\s*$/
 const IBAN_LINE = /^([A-Z]{2}\d{2}[\d ]*\d)\s+BIC:\s*([A-Z0-9]+)/
+/** длинный IBAN (например PT50…) переносит «BIC: …» на следующую строку */
+const IBAN_ONLY = /^([A-Z]{2}\d{2}[\d ]*\d)\s*$/
 const CARD_DT = /(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})\s+(\d{1,2}:\d{2}(?::\d{2})?)\s*$/
 const LABEL_LINE = /^[\p{L} ]{2,40}:(\s|$)/u   // «VS: …», «SS: …», «Referencia platiteľa: …» начинают служебную часть
 
@@ -114,10 +116,11 @@ function parseBody(title: string, body: string[]): { cp: StatementCounterparty; 
     }
     return { cp: { kind: 'card', name: name || title, iban: null }, cardMask, time }
   }
-  const ii = body.findIndex((b) => IBAN_LINE.test(b))
+  const ii = body.findIndex((b, i) => IBAN_LINE.test(b) || (IBAN_ONLY.test(b) && (body[i + 1] ?? '').startsWith('BIC:')))
   if (ii >= 0) {
-    const iban = IBAN_LINE.exec(body[ii]!)![1]!.replace(/ /g, '')
-    const rest = body.slice(ii + 1)
+    const wrapped = !IBAN_LINE.test(body[ii]!)
+    const iban = (wrapped ? IBAN_ONLY : IBAN_LINE).exec(body[ii]!)![1]!.replace(/ /g, '')
+    const rest = body.slice(ii + (wrapped ? 2 : 1))
     const ni = rest.findIndex((b) => b.startsWith('Názov protiúčtu:'))
     let name = ''
     if (ni >= 0) {

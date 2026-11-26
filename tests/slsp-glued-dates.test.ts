@@ -15,3 +15,13 @@ it('PDF Словакии, где две даты слиты в одно слов
   expect(rows[0]).toMatchObject({ valueDate: '2026-09-04', bookingDate: '2026-09-04', amountMinor: -1000 })
   expect(rows[1]).toMatchObject({ valueDate: '2026-09-06', amountMinor: 50000 })
 })
+
+it('длинный IBAN с переносом «BIC:» на следующую строку: имя берётся из «Názov protiúčtu», а не название операции', () => {
+  const st = parseSlspStatement(buildSlsp({
+    opening: '100,00', deposits: '0,00', withdrawals: '- 10,00', closing: '90,00',
+    pages: [[
+      { dates: '23.11.202523.11.2025', lines: ['Okamžitá platba (EB)', 'PT50 0023 0000 4566 0920 1939 4', 'BIC: TESTPTPL', 'Názov protiúčtu: Test Person'], amount: '- 10,00', balance: '90,00' },
+    ]],
+  }))
+  expect(st.accounts[0]!.rows[0]!.counterparty).toMatchObject({ kind: 'sepa', name: 'Test Person', iban: 'PT50002300004566092019394' })
+})
