@@ -18,7 +18,7 @@
 | `tag_groups`, `tags` | tagGroups, tags | 7а | два уровня |
 | `counterparties`, `counterparty_identifiers` | counterparties, counterpartyIdentifiers | 7а | 45 контрагентов в тестовой базе |
 | `transactions` | transactions | 1, 7а | сумма со знаком `numeric(18,2)`; проверки знака, нуля, исходной суммы, начальной корректировки; частичные индексы по действующим записям; внешние ключи на контрагентов, теги и плановость (7а); `import_id`, `transfer_id` пока без ключей |
-| `balance_checkpoints` | checkpoints | 1, итерация 7 (17.11.2026) | не участвуют в расчёте. `kind`: `balance` (сверяется с расчётом), `portfolio_value`, `entered` (учёт остатками, не сверяется; миграция `20261117100000`) |
+| `balance_checkpoints` | checkpoints | 1, итерация 7 (17.11.2026) | не участвуют в расчёте (остаток в расчёте будет браться из **планируемой таблицы `balance_periods`**, см. `docs/ANCHORS.md`). `kind`: `balance` (сверяется с расчётом), `portfolio_value`, `entered` (учёт остатками, не сверяется; миграция `20261117100000`) |
 | `period_locks` | periodLocks | 1, 4в | одно общее закрытие; `project_id` пуст у новых записей |
 | `fx_rates`, `fx_source_priority` | fxRates, fxSourcePriorities | 1 | курсы `numeric(18,8)`, приоритет источников |
 | `import_jobs` | importJobs | 5 (15.11.2026) | задания на импорт: `status` (preparing, waiting_file, review, loaded, cancelled), `accounts` jsonb (счета с введённым остатком и моментом), `package_text` (пакет для чата), `contract_version`, `review` jsonb (миграция 6, 16.11.2026: принятые ответы чата, решения, итог загрузки); RLS только владелец; без логики |
