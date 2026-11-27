@@ -64,6 +64,8 @@ export interface Transaction {
   tagId: string | null; planType: string | null; comment: string | null
   transferId: string | null; dedupeHash: string | null; deletedAt: string | null
   isOpening: boolean; raw: Json | null
+  /** строка документа выписки, из которой встроена операция (этап 2; пусто = не из выписки или авто-пара перевода) */
+  statementRowId?: string | null
   createdBy: string | null; createdAt: string; updatedAt: string
 }
 

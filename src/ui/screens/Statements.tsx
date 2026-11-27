@@ -1,7 +1,7 @@
 // Выписки: список задач, новая загрузка (шаг 1), страница задачи (шаги 2 и далее). Задачи хранятся в базе.
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { createStatementTask, saveStatementFromTask, deleteStatementDocument, buildDocumentWorkbook, documentFileName, deleteStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, resolveProblem, taskAccountsStatus, identifyStatementAccount, confirmAccountsRecognized, confirmCounterpartiesRecognized, taskStatement, updateTaskState } from '../../core'
+import { createStatementTask, saveStatementFromTask, buildStatementAccountIntoLedger, removeStatementAccountFromLedger, deleteStatementDocument, buildDocumentWorkbook, documentFileName, deleteStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, resolveProblem, taskAccountsStatus, identifyStatementAccount, confirmAccountsRecognized, confirmCounterpartiesRecognized, taskStatement, updateTaskState } from '../../core'
 import type { ProblemAction, ProblemDetails } from '../../core'
 import {
   applyCounterpartyFile, buildCounterpartyWorkbook, counterpartyStatus, extractPdfPages, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
@@ -116,8 +116,22 @@ function DocCard({ doc, accs, rows, dbAccs, onChanged }: {
       setDl(url ? { name, url } : null)
     } catch (e) { setMsg({ kind: 'error', text: errorText(e) }) } finally { setBusy(false) }
   }
+  async function ledger(a: StatementDocAccount) {
+    setBusy(true); setMsg(null)
+    try {
+      if (a.builtInAt) {
+        if (!window.confirm('Убрать эту часть выписки из учёта? Её операции будут удалены (парные записи переводов тоже, если они созданы только из неё).')) { setBusy(false); return }
+        const r = await removeStatementAccountFromLedger(ctx, a.id)
+        setMsg({ kind: 'ok', text: `Убрано из учёта операций: ${r.removed}.` })
+      } else {
+        const r = await buildStatementAccountIntoLedger(ctx, a.id)
+        setMsg({ kind: 'ok', text: `Встроено в учёт: создано операций ${r.created}${r.adopted ? `, привязано к существующим переводам ${r.adopted}` : ''}${r.unpaired ? `, переводов без пары ${r.unpaired}` : ''}.` })
+      }
+      bump(); onChanged()
+    } catch (e) { setMsg({ kind: 'error', text: errorText(e) }) } finally { setBusy(false) }
+  }
   async function remove() {
-    if (!window.confirm('Удалить выписку? Операции в учёт она пока не записывала. Контрагенты и теги останутся.')) return
+    if (!window.confirm('Удалить выписку? Контрагенты и теги останутся. Встроенную в учёт выписку сначала нужно убрать из учёта.')) return
     setBusy(true); setMsg(null)
     try { await deleteStatementDocument(ctx, doc.id); bump(); onChanged() } catch (e) { setMsg({ kind: 'error', text: errorText(e) }); setBusy(false) }
   }
@@ -141,6 +155,7 @@ function DocCard({ doc, accs, rows, dbAccs, onChanged }: {
                 {a.openingMinor !== null && a.closingMinor !== null && <p className="muted">Остаток: {formatMinor(a.openingMinor, 2)} → {formatMinor(a.closingMinor, 2)} {cur}</p>}
                 {a.incomeMinor !== null && a.expenseMinor !== null && <p className="muted">Приход: {formatMinor(a.incomeMinor, 2)} · Расход: {formatMinor(a.expenseMinor, 2)} {cur}</p>}
                 <p className="muted">Строк: {n.length}{n.some((r) => r.duplicateOf) ? `, дублей: ${n.filter((r) => r.duplicateOf).length}` : ''} · {a.builtInAt ? 'встроена в учёт' : 'не встроена в учёт'}</p>
+                <button className={a.builtInAt ? 'btn' : 'btn primary'} disabled={busy || !ctx.actor.isOwner} onClick={() => void ledger(a)}>{a.builtInAt ? 'Убрать из учёта' : 'Встроить в учёт'}</button>
               </div>
             )
           })}

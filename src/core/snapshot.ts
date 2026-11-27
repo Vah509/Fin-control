@@ -1,5 +1,6 @@
 // Срез на дату: остаток по счетам и итоги; по валютам и в одной валюте по курсу на дату.
 // Каждый счёт округляется отдельно. Корректировки (не начальные) показываются отдельной строкой «неучтённое».
+import { periodPoints, pointBalance, pointGaps } from './balancePeriods'
 import type { Account } from '../data/types'
 import type { CoreContext } from './context'
 import { fail } from './errors'
@@ -22,6 +23,8 @@ export interface SnapshotRow {
   projectId: string; countryKey: string; holder: string | null; institutionId: string | null
   currencyKey: string
   balanceMinor: number; unaccountedMinor: number
+  /** раньше первой точки отсчёта остатка (balance_periods): остаток неизвестен */
+  noBalance?: boolean
   balance: Converted; unaccounted: Converted
 }
 export interface CurrencyTotal { currencyKey: string; balanceMinor: number; unaccountedMinor: number }
@@ -82,17 +85,22 @@ export async function getSnapshot(ctx: CoreContext, input: SnapshotInput): Promi
     .sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key))
 
   const rows: SnapshotRow[] = []
+  const periods = await ctx.storage.list('balancePeriods')
   for (const a of chosen) {
     const tz = resolveTimeZone(a, e.countries, e.settings)
     const end = endOfLocalDayMs(input.date, tz)
     const txs = await ctx.storage.listTransactions({ accountId: a.id, bookedTo: iso(end) })
-    const balance = txs.reduce((s, t) => s + t.amountMinor, 0)
+    const pts = periodPoints(periods, a.id, tz)
+    const known = pts.length > 0 ? pointBalance(pts, txs, end) : null
+    const noBalance = pts.length > 0 && known === null
+    const balance = noBalance ? 0 : (known ?? txs.reduce((s, t) => s + t.amountMinor, 0))
     const un = txs.filter((t) => t.type === 'adjustment' && !t.isOpening).reduce((s, t) => s + t.amountMinor, 0)
+      + pointGaps(pts, txs).reduce((s, g) => s + g.gapMinor, 0)
     if (a.archivedAt && Date.parse(a.archivedAt) <= end && balance === 0) continue   // архивный нулевой счёт скрыт
     rows.push({
       accountId: a.id, key: a.key, name: a.name, type: a.type, projectId: a.projectId,
       countryKey: a.countryKey, holder: a.holder, institutionId: a.institutionId, currencyKey: a.currencyKey,
-      balanceMinor: balance, unaccountedMinor: un,
+      balanceMinor: balance, unaccountedMinor: un, ...(noBalance ? { noBalance: true } : {}),
       balance: convert(e, balance, a.currencyKey, input.date),
       unaccounted: convert(e, un, a.currencyKey, input.date),
     })
@@ -121,6 +129,7 @@ export async function getUnaccounted(
 ) {
   assertDate(input.from); assertDate(input.to)
   const e = await env(ctx, input.baseCurrency, input.to)
+  const periods = await ctx.storage.list('balancePeriods')
   const out: { accountId: string; currencyKey: string; minor: number; converted: Converted }[] = []
   for (const a of e.accounts) {
     if (input.accountIds && !input.accountIds.includes(a.id)) continue
@@ -130,7 +139,11 @@ export async function getUnaccounted(
       accountId: a.id, types: ['adjustment'], isOpening: false,
       bookedFrom: iso(startOfLocalDayMs(input.from, tz)), bookedTo: iso(endOfLocalDayMs(input.to, tz)),
     })
-    const minor = txs.reduce((s, t) => s + t.amountMinor, 0)
+    const pts = periodPoints(periods, a.id, tz)
+    const gaps = pts.length > 1
+      ? pointGaps(pts, await ctx.storage.listTransactions({ accountId: a.id })).filter((g) => g.atMs >= startOfLocalDayMs(input.from, tz) && g.atMs <= endOfLocalDayMs(input.to, tz))
+      : []
+    const minor = txs.reduce((s, t) => s + t.amountMinor, 0) + gaps.reduce((s, g) => s + g.gapMinor, 0)
     if (minor !== 0) out.push({ accountId: a.id, currencyKey: a.currencyKey, minor, converted: convert(e, minor, a.currencyKey, input.to) })
   }
   return out

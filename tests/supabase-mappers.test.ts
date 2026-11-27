@@ -10,7 +10,7 @@ const env = {
 const base: Transaction = {
   id: 't', accountId: 'acc', counterpartyId: null, importId: null, source: 'manual', bookedAt: '2026-10-01T10:00:00.000Z',
   type: 'expense', amountMinor: -1999, currencyKey: 'eur', originalAmountMinor: -2100, originalCurrencyKey: 'uah', tagId: null,
-  planType: null, comment: null, transferId: null, dedupeHash: null, deletedAt: null, isOpening: false, raw: { a: [1] },
+  planType: null, comment: null, transferId: null, dedupeHash: null, deletedAt: null, isOpening: false, statementRowId: null, raw: { a: [1] },
   createdBy: null, createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z',
 }
 

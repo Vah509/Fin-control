@@ -61,7 +61,7 @@ export const SPECS: { [K in EntityName]: Spec } = {
     f('originalAmountMinor', 'original_amount', { money: 'originalCurrencyKey' }),
     f('originalCurrencyKey', 'original_currency_key'),
     f('tagId', 'tag_id'), f('planType', 'plan_type'), f('comment', 'comment'), f('transferId', 'transfer_id'),
-    f('dedupeHash', 'dedupe_hash'), f('deletedAt', 'deleted_at', 'ts'), f('isOpening', 'is_opening', 'bool'),
+    f('dedupeHash', 'dedupe_hash'), f('deletedAt', 'deleted_at', 'ts'), f('isOpening', 'is_opening', 'bool'), f('statementRowId', 'statement_row_id'),
     f('raw', 'raw', 'json'), f('createdBy', 'created_by'), f('createdAt', 'created_at', 'ts'), f('updatedAt', 'updated_at', 'ts'),
   ] },
   checkpoints: { table: 'balance_checkpoints', pk: 'id', fields: [
