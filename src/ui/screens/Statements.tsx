@@ -103,7 +103,8 @@ function DocCard({ doc, accs, rows, dbAccs, onChanged }: {
   const [msg, setMsg] = useState<Msg>(null)
   const [dl, setDl] = useState<{ name: string; url: string } | null>(null)
   const bank = BANK_RU[doc.bank] ?? doc.bank
-  const period = doc.periodStart && doc.periodEnd ? `${dateRu(doc.periodStart)} — ${dateRu(doc.periodEnd)}` : dateRu(doc.createdAt.slice(0, 10))
+  const short = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(2, 4)}`
+  const period = doc.periodStart && doc.periodEnd ? `${short(doc.periodStart)}–${short(doc.periodEnd)}` : short(doc.createdAt.slice(0, 10))
   const builtIn = accs.filter((a) => a.builtInAt).length
   const sub = `${accs.length === 1 ? '1 счёт' : `${accs.length} счетов`} · строк ${rows.length}${rows.some((r) => r.duplicateOf) ? ` · дублей ${rows.filter((r) => r.duplicateOf).length}` : ''} · ${builtIn === accs.length ? 'встроена' : builtIn === 0 ? 'не встроена' : 'встроена частично'}`
   async function download() {
@@ -121,10 +122,10 @@ function DocCard({ doc, accs, rows, dbAccs, onChanged }: {
     try { await deleteStatementDocument(ctx, doc.id); bump(); onChanged() } catch (e) { setMsg({ kind: 'error', text: errorText(e) }); setBusy(false) }
   }
   return (
-    <div className="acc">
+    <div className="acc doc">
       <div className="acc-head">
         <button type="button" className="acc-main" onClick={() => setOpen(!open)} aria-expanded={open}>
-          <span className="acc-text"><span className="acc-title">{bank} · {period}</span><span className="acc-sum">{sub}</span></span>
+          <span className="acc-text"><span className="acc-title">{bank} <span className="acc-date">{period}</span></span><span className="acc-sum">{sub}</span></span>
           <span className="acc-chev">{open ? '▾' : '▸'}</span>
         </button>
       </div>
