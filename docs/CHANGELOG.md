@@ -2,6 +2,10 @@
 
 Новые записи сверху. Формат: дата, что сделано, затронутые файлы и миграции, что проверено и что нет. Обновляется в каждом ZIP (`docs/WORKFLOW.md`).
 
+## 2026-11-27 (65): только документы: проект «выписки документами»
+
+- Новый `docs/STATEMENT-DOCS.md`: таблицы `statement_documents`, `statement_accounts`, `statement_rows`, `row_marks`, ключ строки, правила дублей (`file_hash`, `duplicate_of`), удаление, экран «Выписки», этапы 1-4, открытые вопросы. `ANCHORS.md` помечен, `DECISIONS.md`, `CURRENT-TASK.md` (6а), `STATUS.md`. Код и версия не менялись (0.2.36).
+
 ## 2026-11-26 (64): шаг 5б: таблица `balance_periods`, версия 0.2.36
 
 - Миграция `20261126100000_iteration12_balance_periods.sql`: таблица (`period_start/end`, `opening_balance`, `closing_balance`, `source`, `ref`, `status`, `note`), проверка `period_end >= period_start`, уникальный индекс одного действующего периода на `(счёт, начало, конец)`, индекс по счёту, RLS (`bp_*`, `can_read/can_write` по счёту), `apply_batch` знает таблицу. Применена к тестовому проекту через MCP; рабочий проект на паузе.
