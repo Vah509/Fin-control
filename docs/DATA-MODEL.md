@@ -18,6 +18,7 @@
 | `tag_groups`, `tags` | tagGroups, tags | 7а | два уровня |
 | `counterparties`, `counterparty_identifiers` | counterparties, counterpartyIdentifiers | 7а | 45 контрагентов в тестовой базе |
 | `transactions` | transactions | 1, 7а | сумма со знаком `numeric(18,2)`; проверки знака, нуля, исходной суммы, начальной корректировки; частичные индексы по действующим записям; внешние ключи на контрагентов, теги и плановость (7а); `import_id`, `transfer_id` пока без ключей |
+| `statement_documents`, `statement_accounts`, `statement_rows`, `row_marks` | statementDocuments, statementAccounts, statementRows, rowMarks | этап 1 (27.11.2026, миграция `20261127100000`) | выписки как документы: шапка, счета с остатками, строки (`row_key`, `duplicate_of`), правки операций по ключу строки. Подробности: `docs/STATEMENT-DOCS.md` |
 | `balance_periods` | balancePeriods | 5б (26.11.2026, миграция `20261126100000`) | период остатков: загруженная выписка или ручная фиксация (начало/конец периода, остаток на начало и конец). В расчёте пока не участвует (шаг 5в), см. `docs/ANCHORS.md`. Один действующий период на `(account_id, period_start, period_end)` |
 | `balance_checkpoints` | checkpoints | 1, итерация 7 (17.11.2026) | не участвуют в расчёте (остаток в расчёте будет браться из **планируемой таблицы `balance_periods`**, см. `docs/ANCHORS.md`). `kind`: `balance` (сверяется с расчётом), `portfolio_value`, `entered` (учёт остатками, не сверяется; миграция `20261117100000`) |
 | `period_locks` | periodLocks | 1, 4в | одно общее закрытие; `project_id` пуст у новых записей |

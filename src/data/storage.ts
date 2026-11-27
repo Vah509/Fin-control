@@ -10,6 +10,7 @@ export type SmallEntity =
   | 'appSettings' | 'planTypes' | 'countries' | 'currencies' | 'institutions' | 'projects'
   | 'accounts' | 'tagGroups' | 'tags' | 'counterparties' | 'counterpartyIdentifiers'
   | 'fxSourcePriorities' | 'importJobs' | 'statementTasks' | 'statementProblems' | 'balancePeriods'
+  | 'statementDocuments' | 'statementAccounts' | 'statementRows' | 'rowMarks'
 
 export interface TransactionQuery {
   accountId?: string
@@ -32,6 +33,8 @@ export interface WriteBatch {
   deleteTransactionIds?: string[]
   /** Удалить все проблемы указанных задач выписок (выполняется до записи put). */
   deleteProblemTaskIds?: string[]
+  /** Удалить документы выписок вместе со счетами и строками (выполняется до записи put); у строк других документов ссылка duplicate_of на удалённые обнуляется. */
+  deleteStatementDocumentIds?: string[]
   audit?: NewAuditEntry[]
   /** Выдать пользователю доступ владельца к новым счетам. Хранилище без пользователей (память, SQLite) это игнорирует. */
   grantOwnerAccess?: { accountId: string; userId: string }[]

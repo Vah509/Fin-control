@@ -16,6 +16,8 @@ export interface StatementTaskState {
   counterpartiesFile?: string; counterpartiesAt?: string; counterpartiesTotals?: CpTotals
   /** шаг 3: файл скачан, время сравнения с базой, число проблем, счета без пары в базе */
   operationsFileDownloaded?: boolean; comparedAt?: string; problemsCount?: number; missingAccounts?: string[]
+  /** этап 1 (0.2.37): задача закрыта сохранением документа выписки */
+  documentId?: string; savedAt?: string; savedRows?: number; savedDuplicates?: number
   /** итог сравнения: операций к записи и уже в базе (с 0.2.33) */
   newCount?: number; inDbCount?: number
   /** «Готово»: сколько операций записано в базу и когда */

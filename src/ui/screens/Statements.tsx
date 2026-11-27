@@ -1,13 +1,13 @@
 // Выписки: список задач, новая загрузка (шаг 1), страница задачи (шаги 2 и далее). Задачи хранятся в базе.
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { compareTask, createStatementTask, deleteStatementTask, checkTaskBalances, planTaskOpeningFixes, applyTaskOpeningFixes, finishStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, resolveProblem, taskAccountsStatus, identifyStatementAccount, confirmAccountsRecognized, confirmCounterpartiesRecognized, saveComparison, taskStatement, updateTaskState } from '../../core'
+import { createStatementTask, saveStatementFromTask, deleteStatementDocument, buildDocumentWorkbook, documentFileName, deleteStatementTask, formatMinor, listStatementTasks, listTaskProblems, recordCounterpartyUpload, resolveProblem, taskAccountsStatus, identifyStatementAccount, confirmAccountsRecognized, confirmCounterpartiesRecognized, taskStatement, updateTaskState } from '../../core'
 import type { ProblemAction, ProblemDetails } from '../../core'
 import {
-  applyCounterpartyFile, buildCounterpartyWorkbook, counterpartyStatus, buildOperationsWorkbook, extractPdfPages, operationsFileName, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
+  applyCounterpartyFile, buildCounterpartyWorkbook, counterpartyStatus, extractPdfPages, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
 } from '../../core/statements'
 import type { StatementTaskState } from '../../core'
-import type { StatementTask } from '../../data/types'
+import type { Account, StatementDocAccount, StatementDocRow, StatementDocument, StatementTask } from '../../data/types'
 import { useApp } from '../app'
 import { useLoad } from '../hooks'
 import { dateRu, dateTimeRu, errorText } from '../format'
@@ -17,16 +17,17 @@ const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 type Msg = { kind: 'ok' | 'error'; text: string } | null
 interface Picked { name: string; bytes: Uint8Array }
 
-async function saveFile(name: string, bytes: Uint8Array, type: string): Promise<void> {
+/** Отдаёт файл: через «Поделиться» (если разрешено), иначе обычным скачиванием. Возвращает ссылку для ручного сохранения: автоскачивание после долгой сборки файла браузер иногда молча блокирует. */
+async function saveFile(name: string, bytes: Uint8Array, type: string): Promise<string | null> {
   const file = new File([bytes as BlobPart], name, { type })
   if (navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: name }); return } catch (e) { if ((e as Error).name === 'AbortError') return }
+    try { await navigator.share({ files: [file], title: name }); return null } catch (e) { if ((e as Error).name === 'AbortError') return null }
   }
   const url = URL.createObjectURL(file)
   const a = document.createElement('a')
   a.href = url; a.download = name
   document.body.appendChild(a); a.click(); a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  return url
 }
 
 // Файл читается в память сразу при выборе (на Android иначе бывает «0 байт»); поле выбора не очищается.
@@ -51,6 +52,7 @@ export function StatementsScreen() {
       {tasks.loading && <Loading />}
       {tasks.error && <ErrorBox text={tasks.error} onRetry={tasks.reload} />}
       {tasks.data && tasks.data.length === 0 && <p className="muted">Загрузок пока нет.</p>}
+      {tasks.data && tasks.data.length > 0 && <h3>Загрузки</h3>}
       {tasks.data && tasks.data.length > 0 && (
         <ul className="plain rows">
           {tasks.data.map((t) => (
@@ -63,7 +65,91 @@ export function StatementsScreen() {
           ))}
         </ul>
       )}
+      <DocumentsList />
     </Screen>
+  )
+}
+
+const BANK_RU: Record<string, string> = { slsp: 'Slovenská sporiteľňa' }
+
+/** Сохранённые выписки (документы): аккордеон; раскрытие: раскладка по счетам, скачать XLSX, удалить. */
+function DocumentsList() {
+  const { ctx } = useApp()
+  const data = useLoad(async () => {
+    const s = ctx.storage
+    const [documents, accounts, rows, dbAccs] = await Promise.all([s.list('statementDocuments'), s.list('statementAccounts'), s.list('statementRows'), s.list('accounts')])
+    return { documents: [...documents].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), accounts, rows, dbAccs }
+  }, [])
+  return (
+    <>
+      <h3>Сохранённые выписки</h3>
+      {data.loading && <Loading />}
+      {data.error && <ErrorBox text={data.error} onRetry={data.reload} />}
+      {data.data && data.data.documents.length === 0 && <p className="muted">Сохранённых выписок пока нет.</p>}
+      {data.data && data.data.documents.map((d) => (
+        <DocCard key={d.id} doc={d} accs={data.data!.accounts.filter((a) => a.documentId === d.id)} rows={data.data!.rows.filter((r) => r.documentId === d.id)}
+          dbAccs={data.data!.dbAccs} onChanged={data.reload} />
+      ))}
+    </>
+  )
+}
+
+function DocCard({ doc, accs, rows, dbAccs, onChanged }: {
+  doc: StatementDocument; accs: StatementDocAccount[]; rows: StatementDocRow[]; dbAccs: Account[]; onChanged: () => void
+}) {
+  const { ctx, bump } = useApp()
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<Msg>(null)
+  const [dl, setDl] = useState<{ name: string; url: string } | null>(null)
+  const bank = BANK_RU[doc.bank] ?? doc.bank
+  const period = doc.periodStart && doc.periodEnd ? `${dateRu(doc.periodStart)} — ${dateRu(doc.periodEnd)}` : dateRu(doc.createdAt.slice(0, 10))
+  const builtIn = accs.filter((a) => a.builtInAt).length
+  const sub = `${accs.length === 1 ? '1 счёт' : `${accs.length} счетов`} · строк ${rows.length}${rows.some((r) => r.duplicateOf) ? ` · дублей ${rows.filter((r) => r.duplicateOf).length}` : ''} · ${builtIn === accs.length ? 'встроена' : builtIn === 0 ? 'не встроена' : 'встроена частично'}`
+  async function download() {
+    setBusy(true); setMsg(null)
+    try {
+      const name = documentFileName(doc)
+      if (dl) URL.revokeObjectURL(dl.url)
+      const url = await saveFile(name, await buildDocumentWorkbook(ctx, doc.id), XLSX)
+      setDl(url ? { name, url } : null)
+    } catch (e) { setMsg({ kind: 'error', text: errorText(e) }) } finally { setBusy(false) }
+  }
+  async function remove() {
+    if (!window.confirm('Удалить выписку? Операции в учёт она пока не записывала. Контрагенты и теги останутся.')) return
+    setBusy(true); setMsg(null)
+    try { await deleteStatementDocument(ctx, doc.id); bump(); onChanged() } catch (e) { setMsg({ kind: 'error', text: errorText(e) }); setBusy(false) }
+  }
+  return (
+    <div className="acc">
+      <div className="acc-head">
+        <button type="button" className="acc-main" onClick={() => setOpen(!open)} aria-expanded={open}>
+          <span className="acc-text"><span className="acc-title">{bank} · {period}</span><span className="acc-sum">{sub}</span></span>
+          <span className="acc-chev">{open ? '▾' : '▸'}</span>
+        </button>
+      </div>
+      {open && (
+        <div className="acc-body">
+          {accs.map((a) => {
+            const acc = dbAccs.find((x) => x.id === a.accountId)
+            const cur = acc?.currencyKey.toUpperCase() ?? ''
+            const n = rows.filter((r) => r.statementAccountId === a.id)
+            return (
+              <div key={a.id}>
+                <p><b>{acc?.name ?? 'Счёт'}</b>{a.periodStart && a.periodEnd ? ` · ${dateRu(a.periodStart)} — ${dateRu(a.periodEnd)}` : ''}</p>
+                {a.openingMinor !== null && a.closingMinor !== null && <p className="muted">Остаток: {formatMinor(a.openingMinor, 2)} → {formatMinor(a.closingMinor, 2)} {cur}</p>}
+                {a.incomeMinor !== null && a.expenseMinor !== null && <p className="muted">Приход: {formatMinor(a.incomeMinor, 2)} · Расход: {formatMinor(a.expenseMinor, 2)} {cur}</p>}
+                <p className="muted">Строк: {n.length}{n.some((r) => r.duplicateOf) ? `, дублей: ${n.filter((r) => r.duplicateOf).length}` : ''} · {a.builtInAt ? 'встроена в учёт' : 'не встроена в учёт'}</p>
+              </div>
+            )
+          })}
+          <button className="btn" disabled={busy} onClick={() => void download()}>Скачать Excel</button>
+          {dl && <a className="btn" href={dl.url} download={dl.name}>Файл не скачался? Нажмите, чтобы сохранить: {dl.name}</a>}
+          <button className="btn" disabled={busy || !ctx.actor.isOwner} onClick={() => void remove()}>Удалить выписку</button>
+          {msg && <Notice kind={msg.kind === 'ok' ? 'ok' : 'warn'}>{msg.text}</Notice>}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -269,6 +355,14 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
   const [msg, setMsg] = useState<Msg>(null)
   const [xlsx, setXlsx] = useState<Picked | null>(null)
   const [openMap, setOpenMap] = useState<Record<number, boolean>>({})
+  const [dl, setDl] = useState<{ step: number; name: string; url: string } | null>(null)
+  const deliver = async (step: number, name: string, bytes: Uint8Array) => {
+    if (dl) URL.revokeObjectURL(dl.url)
+    const url = await saveFile(name, bytes, XLSX)
+    setDl(url ? { step, name, url } : null)
+  }
+  const dlLink = (step: number) => (dl && dl.step === step
+    ? <a className="btn" href={dl.url} download={dl.name}>Файл не скачался? Нажмите, чтобы сохранить: {dl.name}</a> : null)
   const auto = useRef<Set<string>>(new Set())
   const st = taskStatement(task)
   const state = task.state as StatementTaskState
@@ -277,17 +371,14 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
   const accountsPassed = !!state.accountsConfirmed || !!state.counterpartiesLoaded
   const cps = useLoad(() => counterpartyStatus(ctx, st), [task.id, task.updatedAt])
   const allKnown = !!cps.data && cps.data.unrecognized.length === 0
-  const problems = state.problemsCount ?? 0
-  const compared = !!state.comparedAt
   const closed = !!state.operationsDone
-  const ready = !!state.counterpartiesLoaded && compared && problems === 0 && !closed
 
   async function run(fn: () => Promise<string>) {
     setBusy(true); setMsg(null)
     try { setMsg({ kind: 'ok', text: await fn() }); reload() } catch (e) { setMsg({ kind: 'error', text: errorText(e) }) } finally { setBusy(false) }
   }
 
-  // Автопереходы: счета опознаны → шаг 3; контрагенты опознаны → шаг 4; на шаге 4 сравнение с базой идёт само (файл скачивается по кнопке).
+  // Автопереходы: счета опознаны → шаг 3; контрагенты опознаны → шаг 4 («Сохранить выписку»).
   useEffect(() => {
     if (busy || closed || task.status === 'done') return
     const once = (k: string, fn: () => Promise<void>) => {
@@ -298,16 +389,12 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
     }
     if (!accountsPassed) { if (allAccountsKnown) once('acc', async () => { await confirmAccountsRecognized(ctx, task.id) }) }
     else if (!state.counterpartiesLoaded) { if (allKnown) once('cp', async () => { await confirmCounterpartiesRecognized(ctx, task.id) }) }
-    else if (!compared) once('cmp', async () => { await saveComparison(ctx, task.id, await compareTask(ctx, task.id)) })
-  }, [busy, closed, task.status, accountsPassed, allAccountsKnown, allKnown, state.counterpartiesLoaded, compared, ctx, task.id, bump, reload])
+  }, [busy, closed, task.status, accountsPassed, allAccountsKnown, allKnown, state.counterpartiesLoaded, ctx, task.id, bump, reload])
 
-  const bal = useLoad(() => (ready ? checkTaskBalances(ctx, task.id) : Promise.resolve(null)), [task.id, task.updatedAt, ready])
-  const fixes = useLoad(() => (ready && bal.data && !bal.data.ok ? planTaskOpeningFixes(ctx, task.id) : Promise.resolve(null)), [task.id, task.updatedAt, ready, bal.data])
-  const applyFix = (key: string) => run(async () => { await applyTaskOpeningFixes(ctx, task.id, [key]); bump(); bal.reload(); return 'Начальный остаток записан. Остатки проверены заново.' })
   const download = () => run(async () => {
     const a = st.accounts[0]!
     const name = `kontragenty_${a.periodEnd.slice(0, 7)}.xlsx`
-    await saveFile(name, await buildCounterpartyWorkbook(ctx, st), XLSX)
+    await deliver(3, name, await buildCounterpartyWorkbook(ctx, st))
     await updateTaskState(ctx, task.id, { counterpartyFileDownloaded: true })
     return `Файл создан: ${name}. Впишите имена во 2-ю колонку и загрузите обратно.`
   })
@@ -318,29 +405,19 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
     bump()
     return `Принято. Строк: ${r.rowsLinked}, новых контрагентов: ${r.created}, признаков добавлено: ${r.identifiersAdded}${r.tagsSet ? `, тегов проставлено: ${r.tagsSet}` : ''}${r.reassigned ? `, переназначено: ${r.reassigned}` : ''}.`
   })
-  const downloadOps = () => run(async () => {
-    const name = operationsFileName(st)
-    const cmp = await compareTask(ctx, task.id)
-    await saveComparison(ctx, task.id, cmp)
-    await saveFile(name, await buildOperationsWorkbook(ctx, st, cmp), XLSX)
-    bump()
-    return `Файл создан: ${name}. Проблем: ${cmp.problems.length}.`
-  })
-  const finish = () => run(async () => {
-    const r = await finishStatementTask(ctx, task.id); bump()
-    return r.written === 0 ? 'Задача закрыта, новых записей нет.' : `Записано операций в базу: ${r.written}. Задача закрыта.`
+  const save = () => run(async () => {
+    const r = await saveStatementFromTask(ctx, task.id); bump()
+    return r.duplicates > 0 ? `Выписка сохранена: строк ${r.rows}, из них дублей ${r.duplicates} (помечены).` : `Выписка сохранена: строк ${r.rows}.`
   })
   async function remove() {
-    if (!window.confirm('Удалить задачу? Разобранные данные будут стёрты. Уже записанные контрагенты останутся.')) return
+    if (!window.confirm('Удалить задачу? Разобранные данные будут стёрты. Сохранённые выписки и контрагенты останутся.')) return
     setBusy(true)
     try { await deleteStatementTask(ctx, task.id); bump(); go('statements') } catch (e) { setMsg({ kind: 'error', text: errorText(e) }); setBusy(false) }
   }
 
-  // статусы шагов
   const s2: StepStatus = accountsPassed ? 'done' : 'current'
   const s3: StepStatus = state.counterpartiesLoaded ? 'done' : accountsPassed ? 'current' : 'future'
-  const s4: StepStatus = closed || (compared && problems === 0) ? 'done' : state.counterpartiesLoaded ? 'current' : 'future'
-  const s5: StepStatus = closed ? 'done' : ready ? 'current' : 'future'
+  const s4: StepStatus = closed ? 'done' : state.counterpartiesLoaded ? 'current' : 'future'
   const isOpen = (n: number, s: StepStatus) => openMap[n] ?? s === 'current'
   const toggle = (n: number, s: StepStatus) => setOpenMap({ ...openMap, [n]: !isOpen(n, s) })
 
@@ -352,18 +429,10 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
     : 'Нужно опознать счёт'
   const s3sum = s3 === 'future' ? 'Ожидает шага 2'
     : cps.data ? `Контрагентов ${cps.data.total} · опознано ${cps.data.recognized}${state.counterpartiesTotals?.created ? ` · новых ${state.counterpartiesTotals.created}` : ''}${cps.data.unrecognized.length ? ` · не опознано ${cps.data.unrecognized.length}` : ''}` : 'Проверяю…'
-  const nowrite = state.newCount === 0
   const s4sum = s4 === 'future' ? 'Ожидает шага 3'
-    : !compared ? 'Сравниваю с базой…'
-    : problems > 0 ? `Проблем: ${problems}. Нужно решить`
-    : closed || state.newCount === undefined ? 'Проблем нет'
-    : nowrite ? 'Операции уже записаны в базе, новых записей: 0'
-    : `Проблем нет · новых записей: ${state.newCount}, уже в базе: ${state.inDbCount ?? 0}`
-  const s5sum = s5 === 'done' ? `Задача закрыта, записано операций: ${state.writtenCount ?? 0}`
-    : s5 === 'future' ? 'Ожидает шага 4'
-    : !bal.data ? 'Проверяю остатки…'
-    : !bal.data.ok ? 'Остатки не сходятся. Запись заблокирована'
-    : bal.data.newCount === 0 ? 'Остатки сходятся. Операции уже в базе, новых 0' : `Остатки сходятся. К записи: ${bal.data.newCount}`
+    : closed
+      ? (state.documentId ? `Сохранена: строк ${state.savedRows ?? 0}${state.savedDuplicates ? `, дублей ${state.savedDuplicates}` : ''}` : `Задача закрыта, записано операций: ${state.writtenCount ?? 0}`)
+      : 'Готово к сохранению'
 
   return (
     <>
@@ -402,57 +471,18 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
         )}
         {!state.counterpartiesLoaded && state.counterpartyFileDownloaded && !allKnown && <p className="muted">Файл уже скачан. Правьте его и загрузите ниже.</p>}
         <button className={allKnown ? 'btn' : 'btn primary'} disabled={busy} onClick={() => void download()}>Скачать файл контрагентов</button>
+        {dlLink(3)}
         <input type="file" accept=".xlsx" disabled={busy}
           onChange={(e) => { setMsg(null); void readPicked(e.target.files?.[0]).then(setXlsx).catch((x) => setMsg({ kind: 'error', text: errorText(x) })) }} />
         {xlsx && <p className="muted">Выбран: {xlsx.name}</p>}
         <button className="btn primary" disabled={busy || !xlsx} onClick={() => void upload()}>Загрузить правленый файл</button>
       </Step>
-      <Step title="Шаг 4. Операции + сверка" summary={s4sum} status={s4} open={isOpen(4, s4)} onToggle={() => toggle(4, s4)}
-        info="Приложение сравнивает выписку с операциями в базе за период выписки. Нормально: операции нет в базе (будет записана) или она есть и там и там. Проблемы (запись блокируется, пока они есть): операция есть в базе, а в выписке нет; счёта выписки нет в базе; перевод на свой счёт, для которого нельзя создать пару (другая валюта, счёт не привязан). Запись в базу выполняется на шаге 5 после сверки остатков. В файле плюсы в колонках «В выписке» и «В базе».">
-        {compared && state.newCount === 0 && problems === 0 && <Notice kind="ok">Операции уже записаны в базе, новых записей: 0.</Notice>}
-        {compared && !closed && problems === 0 && (state.newCount ?? 0) > 0 && <Notice kind="ok">Проблем нет. Новых записей: {state.newCount}, уже в базе: {state.inDbCount ?? 0}.</Notice>}
-        {compared && (state.missingAccounts?.length ?? 0) > 0 && (
-          <Notice kind="warn">Нет в базе (или признак счёта неоднозначен): …{state.missingAccounts!.join(', …')}. По ним сравнения не было, «В базе» пусто.</Notice>
-        )}
-        {!closed && problems > 0 && <Notice kind="warn">Проблем: {problems}. Откройте «Проблемы».</Notice>}
-        {!closed && problems > 0 && <button className="btn primary" disabled={busy} onClick={() => go('statementProblems', { accountId: task.id })}>Проблемы ({problems})</button>}
-        <button className="btn" disabled={busy} onClick={() => void downloadOps()}>{compared ? 'Сравнить заново и скачать файл' : 'Сравнить с базой и скачать файл'}</button>
-      </Step>
-      <Step title="Шаг 5. Сверка остатков и запись" summary={s5sum} status={s5} open={isOpen(5, s5)} onToggle={() => toggle(5, s5)}>
-        {closed && <Notice kind="ok">Задача закрыта{state.writtenCount !== undefined ? `, записано операций: ${state.writtenCount}` : ''}. Задачу можно удалить, записанные данные останутся.</Notice>}
-        {ready && bal.loading && <p className="muted">Считаю остатки…</p>}
-        {ready && bal.error && <ErrorBox text={bal.error} onRetry={bal.reload} />}
-        {ready && bal.data && (
-          <>
-            {bal.data.items.map((i) => (
-              <div key={i.accountKey}>
-                <p>…{i.accountKey} {i.accountName} ({i.periodStart} — {i.periodEnd})</p>
-                <p className="muted">Начало: в базе {formatMinor(i.startDbMinor, 2)}, в выписке {formatMinor(i.startStmtMinor, 2)} {i.startOk ? '✓' : '✗'}</p>
-                <p className="muted">Конец: в базе после записи {formatMinor(i.endExpectedMinor, 2)}, в выписке {formatMinor(i.endStmtMinor, 2)} {i.endOk ? '✓' : '✗'} {i.currency}</p>
-                {!i.startOk && (() => {
-                  const p = fixes.data?.plans.find((x) => x.accountKey === i.accountKey)
-                  const b = fixes.data?.blocked.find((x) => x.accountKey === i.accountKey)
-                  if (p) return (
-                    <>
-                      <p className="muted">{p.kind === 'create'
-                        ? `Нет начального остатка. Будет создан: ${formatMinor(p.openingMinor, 2)} ${i.currency} на начало периода.`
-                        : `Есть более поздний начальный остаток ${formatMinor(p.oldOpeningMinor ?? 0, 2)}. Новый ${formatMinor(p.openingMinor, 2)} встанет на начало периода; прежний ${p.gapMinor === 0 ? 'удалится (движения его объясняют)' : `станет корректировкой на ${formatMinor(p.gapMinor ?? 0, 2)} (неучтённая разница)`}.`}</p>
-                      <button className="btn primary" disabled={busy} onClick={() => void applyFix(i.accountKey)}>{p.kind === 'create' ? 'Создать начальный остаток' : 'Передвинуть начальный остаток'}</button>
-                    </>
-                  )
-                  if (b) return <p className="muted">Начальный остаток не предлагается: {b.reason}.</p>
-                  return fixes.data ? <p className="muted">До начала периода в базе уже есть записи: остаток не сходится из-за пропуска или дубля. Проверьте предыдущие выписки.</p> : null
-                })()}
-              </div>
-            ))}
-            {bal.data.ok
-              ? <Notice kind="ok">Остатки сходятся.</Notice>
-              : <Notice kind="warn">Остатки не сходятся. Запись заблокирована.</Notice>}
-            {bal.data.ok && bal.data.newCount === 0 && <Notice kind="ok">Операции уже записаны в базе, новых записей: 0.</Notice>}
-            <button className="btn" disabled={busy} onClick={() => bal.reload()}>Проверить остатки ещё раз</button>
-            <button className="btn primary" disabled={busy || !bal.data.ok} onClick={() => void finish()}>{bal.data.newCount === 0 ? 'Закрыть задачу' : `Записать (${bal.data.newCount})`}</button>
-          </>
-        )}
+      <Step title="Шаг 4. Сохранить выписку" summary={s4sum} status={s4} open={isOpen(4, s4)} onToggle={() => toggle(4, s4)}
+        info="Выписка сохраняется документом: период, остаток на начало и конец по каждому счёту и строки. Операции в учёт не записываются: это делает отдельная процедура встраивания. Если какие-то строки уже есть в ранее сохранённых выписках, они помечаются как дубли. Если все строки уже есть, выписка не сохраняется. Сохранённые выписки смотрите на экране «Выписки».">
+        {closed
+          ? <Notice kind="ok">{state.documentId ? 'Выписка сохранена. Смотрите её в списке «Выписки».' : 'Задача закрыта.'}</Notice>
+          : <button className="btn primary" disabled={busy || !recs.every((r) => r.ok)} onClick={() => void save()}>Сохранить выписку</button>}
+        {closed && <button className="btn" disabled={busy} onClick={() => go('statements')}>К списку выписок</button>}
       </Step>
       {busy && <p className="muted">Подождите…</p>}
       {msg && <Notice kind={msg.kind === 'ok' ? 'ok' : 'warn'}>{msg.text}</Notice>}

@@ -105,4 +105,18 @@ describe('слой Supabase: преобразование колонок', () =>
     expect(r['opening_balance']).toBe('1199.44')
     expect(fromRow('balancePeriods', r, env)).toEqual(b)
   })
+
+  it('документы выписок: имена колонок, деньги и пустые значения (этап 1, 0.2.37)', () => {
+    const a = { id: 'sa', documentId: 'd', accountId: 'a1', periodStart: '2026-07-01', periodEnd: '2026-07-31', openingMinor: 119944, closingMinor: null, incomeMinor: null, expenseMinor: null, rowCount: 3, builtInAt: null }
+    const ra = toRow('statementAccounts', a, env)
+    expect(ra['opening_balance']).toBe('1199.44'); expect(ra['closing_balance']).toBeNull()
+    expect(fromRow('statementAccounts', ra, env)).toEqual(a)
+    const r = {
+      id: 'r', documentId: 'd', statementAccountId: 'sa', accountId: 'a1', n: 1, bookedAt: '2026-07-02T10:00:00.000Z', valueDate: '2026-07-02', amountMinor: -1000, feeMinor: 0,
+      balanceAfterMinor: null, counterpartyId: null, title: null, description: 'x', cardMask: null, rowKey: 'k', duplicateOf: null,
+    }
+    expect(fromRow('statementRows', toRow('statementRows', r, env), env)).toEqual(r)
+    const m = { id: 'm', accountId: 'a1', rowKey: 'k', tagId: null, planType: null, comment: 'c', updatedAt: '2026-11-27T10:00:00.000Z' }
+    expect(fromRow('rowMarks', toRow('rowMarks', m, env), env)).toEqual(m)
+  })
 })

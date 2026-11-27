@@ -91,6 +91,15 @@ export class MemoryStorage implements Storage {
     const dropTasks = new Set(batch.deleteProblemTaskIds ?? [])
     for (const [k, p] of next.statementProblems) if (dropTasks.has(p.taskId)) next.statementProblems.delete(k)
 
+    const dropDocs = new Set(batch.deleteStatementDocumentIds ?? [])
+    if (dropDocs.size > 0) {
+      const dropRows = new Set<string>()
+      for (const [k, r] of next.statementRows) if (dropDocs.has(r.documentId)) { dropRows.add(k); next.statementRows.delete(k) }
+      for (const [k, a] of next.statementAccounts) if (dropDocs.has(a.documentId)) next.statementAccounts.delete(k)
+      for (const id of dropDocs) next.statementDocuments.delete(id)
+      for (const [k, r] of next.statementRows) if (r.duplicateOf && dropRows.has(r.duplicateOf)) next.statementRows.set(k, { ...r, duplicateOf: null })
+    }
+
     for (const name of ENTITY_NAMES) {
       const rows = batch.put?.[name]
       if (!rows) continue

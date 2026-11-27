@@ -2,6 +2,14 @@
 
 Новые записи сверху. Формат: дата, что сделано, затронутые файлы и миграции, что проверено и что нет. Обновляется в каждом ZIP (`docs/WORKFLOW.md`).
 
+## 2026-11-27 (66): этап 1 «выписки документами», версия 0.2.37
+
+- Миграция `20261127100000_iteration13_statement_documents.sql`: `statement_documents`, `statement_accounts`, `statement_rows` (`duplicate_of` с `on delete set null`), `row_marks`; RLS только владелец (с delete); `apply_batch` и `delete_statement_document_ids`. Применена к тестовому проекту (проверено: 4 таблицы, 16 политик, функция обновлена).
+- `src/data`: типы и колонки `statementDocuments`, `statementAccounts`, `statementRows`, `rowMarks`; `deleteStatementDocumentIds` в памяти и Supabase.
+- `src/core/statementDocs.ts`: сохранение документа из задачи (содержимое хэшируется, дубли строк по ключу, отказ при полном совпадении), удаление, XLSX документа; `DUPLICATE_STATEMENT`, `DOCUMENT_BUILT_IN`.
+- `Statements.tsx`: список документов (аккордеон), шаг 4 задачи «Сохранить выписку»; шаги сравнения и записи убраны из экрана (код ядра остался).
+- Тесты: `tests/statements/docs.test.ts` (4), мапперы (+1). `tsc`, сборка, все тесты зелёные. На телефоне не проверено.
+
 ## 2026-11-27 (65): только документы: проект «выписки документами»
 
 - Новый `docs/STATEMENT-DOCS.md`: таблицы `statement_documents`, `statement_accounts`, `statement_rows`, `row_marks`, ключ строки, правила дублей (`file_hash`, `duplicate_of`), удаление, экран «Выписки», этапы 1-4, открытые вопросы. `ANCHORS.md` помечен, `DECISIONS.md`, `CURRENT-TASK.md` (6а), `STATUS.md`. Код и версия не менялись (0.2.36).

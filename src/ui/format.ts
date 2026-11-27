@@ -33,6 +33,8 @@ const ERR: Record<ErrorCode, string> = {
   COUNTERPARTY_FILE_INVALID: 'Файл контрагентов не принят',
   RECONCILE_FAILED: 'Сверка выписки не сошлась',
   BALANCE_MISMATCH: 'Остатки не сходятся',
+  DUPLICATE_STATEMENT: 'Эта выписка уже сохранена.',
+  DOCUMENT_BUILT_IN: 'Выписка встроена в учёт: сначала уберите её из учёта.',
 }
 
 export function errorText(e: unknown): string {

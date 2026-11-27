@@ -84,6 +84,30 @@ export interface BalancePeriod {
   note: string | null; createdBy: string | null; createdAt: string
 }
 
+/** Документ выписки (docs/STATEMENT-DOCS.md): сохранённый разбор выписки банка или ручного ввода. Не редактируется, удаляется. */
+export interface StatementDocument {
+  id: string; kind: 'statement' | 'manual'; institutionId: string | null; bank: string; fileName: string
+  /** хэш разобранного содержимого (файл выписки не хранится): повторная загрузка того же содержимого отклоняется */
+  contentHash: string | null; periodStart: string | null; periodEnd: string | null; parser: string
+  createdBy: string | null; createdAt: string
+}
+/** Счёт внутри документа (выписка может быть по нескольким счетам). Остатки пусты у ручного ввода. */
+export interface StatementDocAccount {
+  id: string; documentId: string; accountId: string; periodStart: string | null; periodEnd: string | null
+  openingMinor: number | null; closingMinor: number | null; incomeMinor: number | null; expenseMinor: number | null
+  rowCount: number; builtInAt: string | null
+}
+export interface StatementDocRow {
+  id: string; documentId: string; statementAccountId: string; accountId: string; n: number
+  bookedAt: string; valueDate: string | null; amountMinor: number; feeMinor: number; balanceAfterMinor: number | null
+  counterpartyId: string | null; title: string | null; description: string; cardMask: string | null
+  rowKey: string; duplicateOf: string | null
+}
+/** Правка конкретной операции (тег, плановость, комментарий), отдельно от документа; ключ (accountId, rowKey). */
+export interface RowMark {
+  id: string; accountId: string; rowKey: string; tagId: string | null; planType: string | null; comment: string | null; updatedAt: string
+}
+
 export interface PeriodLock {
   id: string; seq: number; projectId: string | null; lockedThrough: string
   lockedAt: string; lockedBy: string | null; status: 'active' | 'released'
@@ -167,6 +191,10 @@ export interface EntityMap {
   transactions: Transaction
   checkpoints: BalanceCheckpoint
   balancePeriods: BalancePeriod
+  statementDocuments: StatementDocument
+  statementAccounts: StatementDocAccount
+  statementRows: StatementDocRow
+  rowMarks: RowMark
   periodLocks: PeriodLock
   fxRates: FxRate
   fxSourcePriorities: FxSourcePriority
@@ -181,7 +209,7 @@ export const PRIMARY_KEY: { [K in EntityName]: keyof EntityMap[K] & string } = {
   appSettings: 'key', planTypes: 'key', countries: 'key', currencies: 'key',
   institutions: 'id', projects: 'id', accounts: 'id', accountIdentifiers: 'id',
   tagGroups: 'id', tags: 'id', counterparties: 'id', counterpartyIdentifiers: 'id',
-  transactions: 'id', checkpoints: 'id', balancePeriods: 'id', periodLocks: 'id', fxRates: 'id',
+  transactions: 'id', checkpoints: 'id', balancePeriods: 'id', statementDocuments: 'id', statementAccounts: 'id', statementRows: 'id', rowMarks: 'id', periodLocks: 'id', fxRates: 'id',
   fxSourcePriorities: 'source', importJobs: 'id', statementTasks: 'id', statementProblems: 'id',
 }
 export const ENTITY_NAMES = Object.keys(PRIMARY_KEY) as EntityName[]

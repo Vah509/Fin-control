@@ -75,6 +75,29 @@ export const SPECS: { [K in EntityName]: Spec } = {
     f('source', 'source'), f('ref', 'ref'), f('status', 'status'), f('note', 'note'),
     f('createdBy', 'created_by'), f('createdAt', 'created_at', 'ts'),
   ] },
+  statementDocuments: { table: 'statement_documents', pk: 'id', fields: [
+    f('id', 'id'), f('kind', 'kind'), f('institutionId', 'institution_id'), f('bank', 'bank'), f('fileName', 'file_name'),
+    f('contentHash', 'content_hash'), f('periodStart', 'period_start'), f('periodEnd', 'period_end'), f('parser', 'parser'),
+    f('createdBy', 'created_by'), f('createdAt', 'created_at', 'ts'),
+  ] },
+  statementAccounts: { table: 'statement_accounts', pk: 'id', fields: [
+    f('id', 'id'), f('documentId', 'document_id'), f('accountId', 'account_id'), f('periodStart', 'period_start'), f('periodEnd', 'period_end'),
+    f('openingMinor', 'opening_balance', { money: 'accountCurrency' }), f('closingMinor', 'closing_balance', { money: 'accountCurrency' }),
+    f('incomeMinor', 'total_income', { money: 'accountCurrency' }), f('expenseMinor', 'total_expense', { money: 'accountCurrency' }),
+    f('rowCount', 'row_count'), f('builtInAt', 'built_in_at', 'ts'),
+  ] },
+  statementRows: { table: 'statement_rows', pk: 'id', fields: [
+    f('id', 'id'), f('documentId', 'document_id'), f('statementAccountId', 'statement_account_id'), f('accountId', 'account_id'), f('n', 'n'),
+    f('bookedAt', 'booked_at', 'ts'), f('valueDate', 'value_date'),
+    f('amountMinor', 'amount', { money: 'accountCurrency' }), f('feeMinor', 'fee_amount', { money: 'accountCurrency' }),
+    f('balanceAfterMinor', 'balance_after', { money: 'accountCurrency' }),
+    f('counterpartyId', 'counterparty_id'), f('title', 'title'), f('description', 'description'), f('cardMask', 'card_mask'),
+    f('rowKey', 'row_key'), f('duplicateOf', 'duplicate_of'),
+  ] },
+  rowMarks: { table: 'row_marks', pk: 'id', fields: [
+    f('id', 'id'), f('accountId', 'account_id'), f('rowKey', 'row_key'), f('tagId', 'tag_id'), f('planType', 'plan_type'),
+    f('comment', 'comment'), f('updatedAt', 'updated_at', 'ts'),
+  ] },
   periodLocks: { table: 'period_locks', pk: 'id', fields: [
     f('id', 'id'), f('seq', 'seq', 'int'), f('projectId', 'project_id'), f('lockedThrough', 'locked_through'),
     f('lockedAt', 'locked_at', 'ts'), f('lockedBy', 'locked_by'), f('status', 'status'),
@@ -103,7 +126,7 @@ export const SPECS: { [K in EntityName]: Spec } = {
 /** Порядок записи в пакете: родители раньше детей (тот же порядок в SQL-функции apply_batch). */
 export const WRITE_ORDER: EntityName[] = [
   'appSettings', 'planTypes', 'countries', 'currencies', 'institutions', 'projects', 'accounts', 'accountIdentifiers',
-  'tagGroups', 'tags', 'counterparties', 'counterpartyIdentifiers', 'transactions', 'checkpoints', 'balancePeriods', 'periodLocks',
+  'tagGroups', 'tags', 'counterparties', 'counterpartyIdentifiers', 'transactions', 'checkpoints', 'balancePeriods', 'statementDocuments', 'statementAccounts', 'statementRows', 'rowMarks', 'periodLocks',
   'fxRates', 'fxSourcePriorities', 'importJobs', 'statementTasks', 'statementProblems',
 ]
 
