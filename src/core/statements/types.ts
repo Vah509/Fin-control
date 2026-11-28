@@ -9,6 +9,8 @@ export interface StatementCounterparty {
   name: string
   /** SEPA: IBAN контрагента без пробелов */
   iban: string | null
+  /** перевод между своими картами: последние 4 цифры другой карты (опознано разбором выписки) */
+  ownLast4?: string
 }
 
 export interface StatementRow {

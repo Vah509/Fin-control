@@ -4,6 +4,7 @@ import { auditEntry } from './audit'
 import type { CoreContext } from './context'
 import { fail } from './errors'
 import { isValidTimeZone } from './time'
+import { newOwnCounterparty } from './ownCounterparties'
 
 export type NewAccountInput = Omit<Account, 'id' | 'archivedAt' | 'appearance' | 'sortOrder' | 'timezone' | 'servicePercent' | 'institutionId' | 'holder'> &
   Partial<Pick<Account, 'id' | 'appearance' | 'sortOrder' | 'timezone' | 'servicePercent' | 'institutionId' | 'holder'>>
@@ -43,7 +44,7 @@ export async function createAccount(ctx: CoreContext, input: NewAccountInput): P
   }
   await validateAccount(ctx, acc)
   await ctx.storage.applyBatch({
-    put: { accounts: [acc] },
+    put: { accounts: [acc], counterparties: [newOwnCounterparty(ctx, acc, await ctx.storage.list('counterparties'))] },
     grantOwnerAccess: ctx.actor.isOwner && ctx.actor.userId ? [{ accountId: acc.id, userId: ctx.actor.userId }] : undefined,
     audit: [auditEntry(ctx, 'account_created', { tableName: 'accounts', recordId: acc.id, newData: acc as never })],
   })

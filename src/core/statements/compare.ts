@@ -26,10 +26,10 @@ export function pairTarget(accounts: Account[], cp: Counterparty | null, from: A
 }
 
 /** Опознанный контрагент строки выписки (по справочнику на сегодня) или null. */
-export async function rowCounterparties(ctx: CoreContext, st: ParsedStatement): Promise<(c: { name: string; iban: string | null }) => Counterparty | null> {
+export async function rowCounterparties(ctx: CoreContext, st: ParsedStatement): Promise<(c: { name: string; iban: string | null; ownLast4?: string }) => Counterparty | null> {
   const groups = collectCounterpartyGroups(st)
   const found = await recognizeGroups(ctx, groups)
   const map = new Map<string, Counterparty | null>()
-  groups.forEach((g, i) => map.set(groupKeyOf({ name: g.text, iban: g.iban }), found[i] ?? null))
+  groups.forEach((g, i) => map.set(groupKeyOf({ name: g.text, iban: g.iban, ownLast4: g.ownLast4 }), found[i] ?? null))
   return (c) => map.get(groupKeyOf(c)) ?? null
 }

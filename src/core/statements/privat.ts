@@ -7,6 +7,33 @@ import type { ParsedStatement, StatementAccount, StatementRow } from './types'
 
 const HEAD = ['Дата', 'Категорія', 'Картка', 'Опис операції', 'Сума в валюті картки', 'Валюта картки', 'Сума в валюті транзакції', 'Валюта транзакції', 'Залишок на кінець періоду', 'Валюта залишку'] as const
 type Col = (typeof HEAD)[number]
+const OWN_TEXT = /^(?:зі своєї картки|на свою картку|на картку)(?:\s*(?:\*(\d{4})|(\d{2})\*+(\d{2})))?$/i
+const PAIR_MS = 10_000
+
+/** Перевод между своими картами: последние 4 цифры другой карты по маске в описании или по парной операции (другая карта, обратный знак, ±10 с). */
+export function findOwnTransfers<T extends { key: string; desc: string; date: string; time: string; amount: number; mask: string }>(raws: T[]): Map<T, string> {
+  const own = new Map<T, string>()
+  const masks = new Map<string, string>()
+  for (const x of raws) masks.set(x.key, x.mask.replace(/\s/g, ''))
+  const parsed = raws.map((x) => ({ x, m: OWN_TEXT.exec(x.desc) })).filter((p): p is { x: T; m: RegExpExecArray } => !!p.m)
+  for (const { x, m } of parsed) {
+    if (/^на картку/i.test(x.desc) && !m[1] && !m[2]) continue
+    if (m[1]) { if (m[1] !== x.key) own.set(x, m[1]); continue }
+    if (m[2]) {
+      const hit = [...masks].filter(([k, mk]) => k !== x.key && mk.startsWith(m[2]!) && mk.endsWith(m[3]!))
+      if (hit.length === 1) own.set(x, hit[0]![0])
+    }
+  }
+  const ts = (x: T) => Date.parse(`${x.date}T${x.time}Z`)
+  for (const { x } of parsed) {
+    if (own.has(x) || OWN_TEXT.exec(x.desc)?.[1] || OWN_TEXT.exec(x.desc)?.[2]) continue
+    const cand = parsed.map((p) => p.x).filter((y) => y !== x && y.key !== x.key && x.amount * y.amount < 0 && Math.abs(ts(y) - ts(x)) <= PAIR_MS
+      && (own.get(y) ?? x.key) === x.key && !(own.has(y) && own.get(y) !== x.key))
+    if (cand.length === 1) { own.set(x, cand[0]!.key); if (!own.has(cand[0]!)) own.set(cand[0]!, x.key) }
+  }
+  return own
+}
+
 const TRANSFER_CATEGORIES = new Set(['перекази', 'зарахування переказу'])
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -75,6 +102,7 @@ export async function parsePrivatStatement(bytes: Uint8Array): Promise<ParsedSta
   const byCard = new Map<string, Raw[]>()
   for (const x of chrono) byCard.set(x.key, [...(byCard.get(x.key) ?? []), x])
 
+  const ownOf = findOwnTransfers(chrono)
   const accounts: StatementAccount[] = []
   for (const [key, list] of [...byCard].sort((a, b) => a[0].localeCompare(b[0]))) {
     const rows: StatementRow[] = list.map((x, i) => {
@@ -83,7 +111,7 @@ export async function parsePrivatStatement(bytes: Uint8Array): Promise<ParsedSta
       const transfer = TRANSFER_CATEGORIES.has(x.category.toLowerCase())
       return {
         n: i + 1, accountKey: key, valueDate: x.date, bookingDate: x.date, time: x.time, title: x.category,
-        counterparty: { kind: transfer ? 'other' : 'card', name: x.desc, iban: null },
+        counterparty: ownOf.has(x) ? { kind: 'other', name: `Свій рахунок •••• ${ownOf.get(x)}`, iban: null, ownLast4: ownOf.get(x)! } : { kind: transfer ? 'other' : 'card', name: x.desc, iban: null },
         cardMask: x.mask, category: x.category,
         description: foreign ? `${x.desc} (${fmt(x.txAmount)} ${x.txCur})` : x.desc,
         amountMinor: x.amount, feeMinor: 0, balanceAfterMinor: x.balance, currency: x.cur,

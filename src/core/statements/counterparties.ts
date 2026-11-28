@@ -6,6 +6,7 @@ import type { CoreContext } from '../context'
 import { fail } from '../errors'
 import { normalizeIdentifier } from '../identifiers'
 import { makeKey } from '../keys'
+import { ensureOwnCounterparties } from '../ownCounterparties'
 import type { Tag, TagGroup } from '../../data/types'
 import { addDays } from '../time'
 import { createTag, createTagGroup } from '../tags'
@@ -18,6 +19,8 @@ export interface CpGroup {
   /** SEPA: IBAN контрагента без пробелов */
   iban: string | null
   kind: 'card' | 'sepa' | 'other'
+  /** перевод между своими картами: последние 4 цифры другой карты */
+  ownLast4?: string
   rows: number
   /** до 3 примеров операций для справки: дата · сумма · описание */
   samples: string[]
@@ -40,8 +43,9 @@ const ibanKey = (iban: string) => normalizeIdentifier('account_number', iban)
 const activeOn = (i: { validFrom: string; validTo: string | null }, d: string) => i.validFrom <= d && d <= (i.validTo ?? '9999-12-31')
 
 /** Ключ группы контрагента (общий для файла контрагентов и файла операций). */
-export function groupKeyOf(c: { name: string; iban: string | null }): string {
+export function groupKeyOf(c: { name: string; iban: string | null; ownLast4?: string }): string {
   const text = collapse(c.name)
+  if (c.ownLast4) return `own:${c.ownLast4}`
   return c.iban ? `iban:${ibanKey(c.iban)}` : `name:${nameKey(text)}`
 }
 
@@ -57,7 +61,7 @@ export function collectCounterpartyGroups(st: ParsedStatement): CpGroup[] {
       const g = map.get(key)
       const sample = `${r.bookingDate} · ${(r.amountMinor / 100).toFixed(2)} ${acc.currency} · ${collapse(r.description).slice(0, 120)}`
       if (g) { g.rows++; if (g.samples.length < 3) g.samples.push(sample) }
-      else map.set(key, { text, iban: c.iban ? ibanKey(c.iban).toUpperCase() : null, kind: c.kind, rows: 1, samples: [sample] })
+      else map.set(key, { text, iban: c.iban ? ibanKey(c.iban).toUpperCase() : null, kind: c.kind, ...(c.ownLast4 ? { ownLast4: c.ownLast4 } : {}), rows: 1, samples: [sample] })
     }
   }
   return [...map.values()]
@@ -65,8 +69,17 @@ export function collectCounterpartyGroups(st: ParsedStatement): CpGroup[] {
 
 /** Опознание по справочнику (по умолчанию на сегодня: признаки контрагентов не привязаны к дате выписки). Сначала IBAN, затем название. null = не опознан. */
 export async function recognizeGroups(ctx: CoreContext, groups: CpGroup[], date = ctx.now().toISOString().slice(0, 10)): Promise<(Counterparty | null)[]> {
+  await ensureOwnCounterparties(ctx)
   const cps = await ctx.storage.list('counterparties')
   const ids = (await ctx.storage.list('counterpartyIdentifiers')).filter((i) => activeOn(i, date))
+  // свои карты: последние 4 цифры -> контрагент «свой счёт» (только если карта однозначна)
+  const accIdents = (await ctx.storage.listAccountIdentifiers()).filter((i) => i.last4 && (i.kind === 'account_number' || i.kind === 'card_mask') && activeOn(i, date))
+  const ownByLast4 = new Map<string, Counterparty>()
+  for (const l4 of new Set(accIdents.map((i) => i.last4!))) {
+    const accIds = new Set(accIdents.filter((i) => i.last4 === l4).map((i) => i.accountId))
+    const hit = accIds.size === 1 ? cps.find((c) => c.kind === 'own_account' && c.accountId === [...accIds][0]) : undefined
+    if (hit) ownByLast4.set(l4, hit)
+  }
   const byId = new Map(cps.map((c) => [c.id, c]))
   const byName = new Map<string, string>()
   for (const i of ids) if (i.kind === 'statement_name' && i.value) byName.set(nameKey(i.value), i.counterpartyId)
@@ -75,6 +88,7 @@ export async function recognizeGroups(ctx: CoreContext, groups: CpGroup[], date 
   const c = ctx.crypto ?? null   // без ключей шифрования (пока так в приложении) опознание только по названию
   const out: (Counterparty | null)[] = []
   for (const g of groups) {
+    if (g.ownLast4) { out.push(ownByLast4.get(g.ownLast4) ?? null); continue }
     let id: string | undefined
     if (g.iban && c) id = byHash.get(await c.hmacHex(`account_number:${ibanKey(g.iban)}`))
     id ??= byName.get(nameKey(g.text))
@@ -167,7 +181,7 @@ export async function applyCounterpartyFile(ctx: CoreContext, rows: CpFileRow[])
 
   // Контрагент без тега (новый или существующий без тега) получает тег «К уточнению» (владелец часто не знает, что это): потом отбирается по этому тегу.
   // Пустая колонка «Тег» у существующего контрагента с тегом ничего не меняет.
-  const untagged = [...new Set(links.map((l) => l.cpId))].filter((id) => !tagWanted.has(id) && !(cps.find((c) => c.id === id)?.defaultTagId)).map((id) => ({ id }))
+  const untagged = [...new Set(links.map((l) => l.cpId))].filter((id) => !tagWanted.has(id) && !(cps.find((c) => c.id === id)?.defaultTagId) && cps.find((c) => c.id === id)?.kind !== 'own_account').map((id) => ({ id }))
   if (untagged.length) {
     let todo = allTags.find((t) => !t.archivedAt && nameKey(t.name) === nameKey(TODO_TAG))
     if (!todo) {

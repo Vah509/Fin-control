@@ -41,6 +41,6 @@ describe('шаг 2: статус опознания контрагентов', (
     expect([c.total, c.recognized, c.unrecognized.length]).toEqual([3, 3, 0])
     const t = await confirmCounterpartiesRecognized(ctx, task.id)
     expect(t.state).toMatchObject({ counterpartiesLoaded: true, counterpartiesFile: 'без файла: все опознаны' })
-    expect(await storage.list('counterparties')).toHaveLength(3)
+    expect((await storage.list('counterparties')).filter((c) => c.kind !== 'own_account')).toHaveLength(2)   // Shop A и Shop B; контрагент «свой счёт» Test Sender и автосозданные не считаются
   })
 })
