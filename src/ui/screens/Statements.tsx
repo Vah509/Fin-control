@@ -135,7 +135,7 @@ function DocCard({ doc, accs, rows, dbAccs, onChanged }: {
     try { await deleteStatementDocument(ctx, doc.id); bump(); onChanged() } catch (e) { setMsg({ kind: 'error', text: errorText(e) }); setBusy(false) }
   }
   return (
-    <div className="acc doc">
+    <div className={`acc doc${accs.length > 0 && builtIn === accs.length ? ' done' : ''}`}>
       <div className="acc-head">
         <button type="button" className="acc-main" onClick={() => setOpen(!open)} aria-expanded={open}>
           <span className="acc-text"><span className="acc-title">{bank} <span className="acc-date">{period}</span></span><span className="acc-sum">{sub}</span></span>

@@ -8,6 +8,7 @@ import { normalizeIdentifier } from '../identifiers'
 import { makeKey } from '../keys'
 import type { Tag, TagGroup } from '../../data/types'
 import { addDays } from '../time'
+import { createTag, createTagGroup } from '../tags'
 import type { ParsedStatement } from './types'
 
 /** Строка колонки 1 файла контрагентов. */
@@ -21,6 +22,9 @@ export interface CpGroup {
 }
 
 /** Строка файла, прочитанная обратно. row = номер строки в Excel (для сообщений об ошибках). */
+/** Тег по умолчанию для новых контрагентов без тега (создаётся при первой нужде в группе «Служебные»). */
+export const TODO_TAG = 'К уточнению'
+const TODO_GROUP = 'Служебные'
 export interface CpFileRow { row: number; text: string; resolved: string; newName: string; iban: string | null; /** «Группа › Тег» или просто имя тега; пусто = не менять */ tag?: string }
 
 export interface CpFileResult { created: number; identifiersAdded: number; reassigned: number; rowsLinked: number; tagsSet: number }
@@ -158,6 +162,18 @@ export async function applyCounterpartyFile(ctx: CoreContext, rows: CpFileRow[])
     fail('COUNTERPARTY_FILE_INVALID', shown + (errors.length > 5 ? ` (и ещё ${errors.length - 5})` : '') + '. Ничего не записано.', { errors })
   }
 
+  // Контрагент без тега (новый или существующий без тега) получает тег «К уточнению» (владелец часто не знает, что это): потом отбирается по этому тегу.
+  // Пустая колонка «Тег» у существующего контрагента с тегом ничего не меняет.
+  const untagged = [...new Set(links.map((l) => l.cpId))].filter((id) => !tagWanted.has(id) && !(cps.find((c) => c.id === id)?.defaultTagId)).map((id) => ({ id }))
+  if (untagged.length) {
+    let todo = allTags.find((t) => !t.archivedAt && nameKey(t.name) === nameKey(TODO_TAG))
+    if (!todo) {
+      const group = tagGroups.find((g) => nameKey(g.name) === nameKey(TODO_GROUP)) ?? await createTagGroup(ctx, { name: TODO_GROUP })
+      todo = await createTag(ctx, { groupId: group.id, name: TODO_TAG })
+    }
+    for (const c of untagged) tagWanted.set(c.id, { tagId: todo.id, row: 0 })
+  }
+
   const crypto = ctx.crypto ?? null   // без ключей IBAN-признаки не создаются, остаются названия
   const put: CounterpartyIdentifier[] = []
   const seen = new Set<string>()
@@ -191,9 +207,9 @@ export async function applyCounterpartyFile(ctx: CoreContext, rows: CpFileRow[])
   let tagsSet = 0
   for (const [cpId, w] of tagWanted) {
     const fresh = [...newCps.values()].find((c) => c.id === cpId)
-    if (fresh) { fresh.defaultTagId = w.tagId; tagsSet++; continue }
+    if (fresh) { fresh.defaultTagId = w.tagId; if (w.row) tagsSet++; continue }
     const old = cps.find((c) => c.id === cpId)
-    if (old && old.defaultTagId !== w.tagId) { updated.push({ ...old, defaultTagId: w.tagId }); tagsSet++ }
+    if (old && old.defaultTagId !== w.tagId) { updated.push({ ...old, defaultTagId: w.tagId }); if (w.row) tagsSet++ }
   }
   const created = [...newCps.values()]
   if (created.length || put.length || updated.length) {

@@ -23,7 +23,7 @@ describe('тег новому контрагенту при загрузке ф�
     const cps = await ctx.storage.list('counterparties')
     expect(cps.find((c) => c.name === 'Lidl 165')!.defaultTagId).toBe(lidl.id)
     expect(cps.find((c) => c.name === 'Kaufland')!.defaultTagId).toBe(lidl.id)
-    expect(cps.find((c) => c.name === 'Bolt')!.defaultTagId).toBeNull()
+    expect(cps.find((c) => c.name === 'Bolt')!.defaultTagId).toBe((await ctx.storage.list('tags')).find((t) => t.name === 'К уточнению')!.id) // решение 28.11.2026
   })
   it('опознанному контрагенту тег ставится, пустая колонка ничего не меняет', async () => {
     const { ctx, lidl } = await base()

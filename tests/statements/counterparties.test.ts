@@ -39,6 +39,16 @@ describe('файл контрагентов', () => {
     expect(ibanId.value).toBeNull(); expect(ibanId.last4).toBe('0002'); expect(ibanId.valueEnc).toBeTruthy()
   })
 
+  it('новый контрагент без тега получает «К уточнению», с тегом остаётся свой', async () => {
+    const { ctx, storage } = await setup({ withCrypto: true })
+    await applyCounterpartyFile(ctx, [row(2, 'Shop A'), row(3, 'Shop B')])
+    const todo = (await storage.list('tags')).filter((t) => t.name === 'К уточнению')
+    expect(todo).toHaveLength(1)
+    expect((await storage.list('counterparties')).map((c) => c.defaultTagId)).toEqual([todo[0]!.id, todo[0]!.id])
+    await applyCounterpartyFile(ctx, [row(2, 'Shop C')])
+    expect((await storage.list('tags')).filter((t) => t.name === 'К уточнению')).toHaveLength(1)
+  })
+
   it('без колонки 3 имя = текст из колонки 1', async () => {
     const { ctx, storage } = await setup({ withCrypto: true })
     await applyCounterpartyFile(ctx, [row(2, 'Edge Cafe-BRATISLAVA')])
@@ -95,5 +105,16 @@ describe('файл контрагентов', () => {
     ])
     const res = await applyCounterpartyFile(ctx, rows.map((r) => (r.row === 3 ? { ...r, resolved: 'Lidl' } : r)))
     expect(res.created).toBe(1)
+  })
+
+  it('без тега: новый получает «К уточнению» (тег создаётся), существующий с тегом остаётся при пустой колонке', async () => {
+    const { ctx, storage } = await setup({ withCrypto: true })
+    await applyCounterpartyFile(ctx, [row(2, 'Edge Cafe-BRATISLAVA')])
+    const tags = await storage.list('tags')
+    const todo = tags.find((x) => x.name === 'К уточнению')!
+    expect((await storage.list('counterparties'))[0]!.defaultTagId).toBe(todo.id)
+    await applyCounterpartyFile(ctx, [row(2, 'Edge Cafe 2', { resolved: 'Edge Cafe-BRATISLAVA' })])
+    expect((await storage.list('counterparties'))[0]!.defaultTagId).toBe(todo.id)
+    expect((await storage.list('tags')).filter((x) => x.name === 'К уточнению')).toHaveLength(1)
   })
 })
