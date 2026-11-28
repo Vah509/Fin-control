@@ -9,7 +9,8 @@ import { findDbAccount, rowCounterparties } from './statements/compare'
 import { reconcileAccount } from './statements/reconcile'
 import { statementBookedAt } from './statements/write'
 import type { ParsedStatement } from './statements/types'
-import { getTask, taskStatement, type StatementTaskState } from './statementTasks'
+import { getTask, recordCounterpartyUpload, taskStatement, type StatementTaskState } from './statementTasks'
+import { counterpartyStatus } from './statements/counterparties'
 
 async function sha256Hex(text: string): Promise<string> {
   const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
@@ -154,4 +155,15 @@ export async function buildDocumentWorkbook(ctx: CoreContext, documentId: string
   }
   for (const w of [ws, rs]) { w.getRow(1).font = { bold: true }; w.views = [{ state: 'frozen', ySplit: 1 }] }
   return new Uint8Array((await wb.xlsx.writeBuffer()) as ArrayBuffer)
+}
+
+/** Шаг 3 без файла: все контрагенты выписки уже опознаны, сразу к шагу 4. Иначе отказ. */
+export async function confirmCounterpartiesRecognized(ctx: CoreContext, taskId: string): Promise<StatementTask> {
+  if (!ctx.actor.isOwner) fail('FORBIDDEN', 'шаг выполняет только владелец')
+  const t = await getTask(ctx, taskId)
+  const st = taskStatement(t)
+  const c = await counterpartyStatus(ctx, st)
+  if (c.unrecognized.length > 0) fail('INVALID_FIELD', `не опознано контрагентов: ${c.unrecognized.length}, нужен файл контрагентов`)
+  const rows = st.accounts.reduce((n, a) => n + a.rows.length, 0)
+  return recordCounterpartyUpload(ctx, taskId, 'без файла: все опознаны', { rows, created: 0, identifiersAdded: 0, reassigned: 0 })
 }

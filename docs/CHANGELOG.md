@@ -2,6 +2,12 @@
 
 Новые записи сверху. Формат: дата, что сделано, затронутые файлы и миграции, что проверено и что нет. Обновляется в каждом ZIP (`docs/WORKFLOW.md`).
 
+## 2026-11-28 (69): чистка ядра, версия 0.2.40
+
+- Удалены файлы (список `cleanup-requests/cleanup-0.2.40.txt`): `src/core/statementProblems.ts`, `src/core/statements/balances.ts`, `openingFix.ts`, `opsWorkbook.ts`, тесты `openingfix`, `opsWorkbook`, `resolve`, `write` в `tests/statements/`. Экран «Проблемы» (`StatementProblemsScreen`) и страница `statementProblems` убраны из `Statements.tsx`, `App.tsx`, `app.tsx`, `navHistory.ts`.
+- `compare.ts`: только помощники опознания; `write.ts`: только `statementBookedAt`; `confirmCounterpartiesRecognized` в `statementDocs.ts`. Из `tests/statement-tasks.test.ts` убраны тесты старого закрытия, из `accountstep` и `cpstatus` вызовы сравнения.
+- Данные: таблица `statement_problems` и сущность остаются. `tsc`, сборка, 256 тестов зелёные (было 291: убраны тесты старой логики). На телефоне не проверено.
+
 ## 2026-11-28 (68): этап 2 «встраивание выписок», версия 0.2.39
 
 - Решения владельца (27.11.2026): старые операции из выписок удалить и встроить заново (1А); дыры в остатках не блокируют, разница показывается как «неучтённое» (2); переводы между своими счетами: парная запись сразу, вторая сторона присваивается строке (3А).

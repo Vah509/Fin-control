@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyCounterpartyFile, collectCounterpartyGroups, counterpartyStatus, parseSlspStatement } from '../../src/core/statements'
-import { compareTask, confirmCounterpartiesRecognized, createStatementTask, saveComparison } from '../../src/core'
+import { confirmCounterpartiesRecognized, createStatementTask } from '../../src/core'
 import type { Counterparty, Transaction } from '../../src/data/types'
 import { ID, setup } from '../helpers'
 import { buildSlsp } from './slspFixture'
@@ -25,7 +25,6 @@ async function prepared(opts: { identifier?: boolean; txs?: Transaction[]; sende
   }
   await t.storage.applyBatch({ put } as never)
   const task = await createStatementTask(t.ctx, st, 'a.pdf')
-  await saveComparison(t.ctx, task.id, await compareTask(t.ctx, task.id))
   return { ...t, st, task }
 }
 
