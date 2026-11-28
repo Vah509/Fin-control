@@ -1,8 +1,0 @@
-src/core/statementProblems.ts
-src/core/statements/balances.ts
-src/core/statements/openingFix.ts
-src/core/statements/opsWorkbook.ts
-tests/statements/openingfix.test.ts
-tests/statements/opsWorkbook.test.ts
-tests/statements/resolve.test.ts
-tests/statements/write.test.ts
