@@ -7,6 +7,7 @@ import type { ParsedStatement } from './types'
 export const CP_SHEET = 'Выписка'
 export const CP_DIRECTORY_SHEET = 'Справочник'
 export const CP_TAGS_SHEET = 'Теги'
+export const CP_HELP_SHEET = 'Инструкция'
 const KIND_RU: Record<string, string> = { shop: 'магазин', person: 'человек', organization: 'организация', own_account: 'свой счёт' }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -15,6 +16,42 @@ const loadExcel = async (): Promise<any> => {
     throw new Error('Не удалось загрузить модуль Excel. Закройте приложение полностью и откройте снова (возможно, вышла новая версия)')
   }
 }
+
+
+/** Текст листа «Инструкция»: промпт для ИИ, которому владелец отдаёт этот файл вместе с исходной выпиской. */
+export const CP_INSTRUCTION: string[] = [
+  'ИНСТРУКЦИЯ ДЛЯ ИИ (этот лист не менять и не удалять)',
+  '',
+  '1. ЗАДАЧА',
+  'Нужно опознать контрагентов из банковской выписки. К сообщению приложены два файла: (1) этот XLSX, (2) исходная выписка банка (PDF или XLSX). Заполни лист «Выписка» этого файла и верни его.',
+  '',
+  '2. ЛИСТЫ',
+  '«Выписка»: рабочий лист, одна строка на одного контрагента. «Справочник»: контрагенты, которые уже есть в базе (имя и тип), только читать. «Теги»: допустимые теги в виде «Группа › Тег», только читать.',
+  '',
+  '3. КОЛОНКИ ЛИСТА «ВЫПИСКА»',
+  'A «Контрагент в выписке»: как написано в выписке. НЕ менять.',
+  'B «Опознанный контрагент»: имя из листа «Справочник», символ в символ. Пусто, если подходящего контрагента в справочнике нет.',
+  'C «Тег»: значение из листа «Теги», точно как написано. Заполняй только если уверен, иначе оставь пустым.',
+  'D «Имя нового контрагента»: для тех, кого нет в справочнике. Короткое понятное имя (бренд, организация или человек) без города, адреса и номера точки.',
+  'E «IBAN (служебное, не менять)»: не менять.',
+  'F «Примеры из выписки»: до трёх операций (дата · сумма · описание), только для справки, чтобы понять, что это за контрагент. НЕ менять.',
+  '',
+  '4. ПРАВИЛА ЗАПОЛНЕНИЯ',
+  '— Строки, где колонка B уже заполнена, не трогай.',
+  '— Для каждой пустой строки сначала ищи контрагента в листе «Справочник». Нашёл: впиши его имя в B. Не нашёл: впиши имя в D, колонку B оставь пустой. В одной строке заполняется только B или только D.',
+  '— Мелкие различия не делают контрагента новым. Считай одним контрагентом названия, которые отличаются регистром, диакритикой, городом или районом после запятой, номером или кодом точки. Пример: «LIDL», «Lidl dakuje 165», «LIDL Bratislava, Ruzinov» это один «Lidl», если он есть в справочнике.',
+  '— Разные люди с одинаковой фамилией («Довженко А.» и «Довженко В.») это разные контрагенты. Сомневаешься: не объединяй, впиши имя в D.',
+  '— Колонку «Тег» у строк, где контрагент опознан, оставляй пустой: тег подтянется из справочника сам. Тег указывай только новым контрагентам и только если уверен.',
+  '— Не добавляй, не удаляй и не переставляй строки и колонки. Не меняй заголовки, названия листов, выпадающие списки и имя файла.',
+  '— Не выдумывай. Используй только этот файл и выписку. Номера карт и счетов в ответ не выводи.',
+  '',
+  '5. ЧТО ВЕРНУТЬ',
+  'Один файл: заполненный XLSX с тем же именем. В тексте ответа максимум две строки: сколько строк заполнено и какие оставлены пустыми.',
+  '',
+  '6. ПРИМЕР',
+  'До: A = «LIDL Bratislava, Ruzinov», B пусто, D пусто. В справочнике есть «Lidl». После: B = «Lidl», D пусто.',
+  'До: A = «Zepen House Nivy, Ruzinov», B пусто. В справочнике такого нет. После: B пусто, D = «Zepen House».',
+]
 
 /** Выгрузка: читает справочник и опознаёт контрагентов на конец периода выписки. */
 export async function buildCounterpartyWorkbook(ctx: CoreContext, st: ParsedStatement): Promise<Uint8Array> {
@@ -31,12 +68,15 @@ export async function buildCounterpartyWorkbook(ctx: CoreContext, st: ParsedStat
   }
 
   const wb = new ExcelJS.Workbook()
+  const help = wb.addWorksheet(CP_HELP_SHEET)
+  help.columns = [{ width: 110 }]
+  CP_INSTRUCTION.forEach((t, i) => { const r = help.addRow([t]); r.alignment = { wrapText: true, vertical: 'top' }; if (i === 0 || /^\d\. /.test(t)) r.font = { bold: true } })
   const ws = wb.addWorksheet(CP_SHEET)
   ws.columns = [
-    { header: 'Контрагент в выписке', width: 46 }, { header: 'Опознанный контрагент', width: 34 }, { header: 'Тег', width: 34 },
-    { header: 'Имя нового контрагента', width: 30 }, { header: 'IBAN (служебное, не менять)', width: 28 },
+    { header: 'Контрагент в выписке', width: 46 }, { header: 'Опознанный контрагент', width: 40 }, { header: 'Тег', width: 44 },
+    { header: 'Имя нового контрагента', width: 30 }, { header: 'IBAN (служебное, не менять)', width: 28 }, { header: 'Примеры из выписки (справка, не менять)', width: 90 },
   ]
-  groups.forEach((g, i) => ws.addRow([g.text, found[i]?.name ?? '', (found[i]?.defaultTagId && labelById.get(found[i]!.defaultTagId!)) || '', '', g.iban ?? '']))
+  groups.forEach((g, i) => ws.addRow([g.text, found[i]?.name ?? '', (found[i]?.defaultTagId && labelById.get(found[i]!.defaultTagId!)) || '', '', g.iban ?? '', g.samples.join(' | ')]))
   const dir = wb.addWorksheet(CP_DIRECTORY_SHEET)
   dir.columns = [{ header: 'Имя', width: 40 }, { header: 'Тип', width: 16 }]
   for (const c of cps) dir.addRow([c.name, KIND_RU[c.kind] ?? c.kind])
@@ -44,6 +84,8 @@ export async function buildCounterpartyWorkbook(ctx: CoreContext, st: ParsedStat
   tg.columns = [{ header: 'Группа › Тег', width: 44 }]
   for (const l of labels) tg.addRow([l])
   for (const w of [ws, dir, tg]) { w.getRow(1).font = { bold: true }; w.views = [{ state: 'frozen', ySplit: 1 }] }
+  // Телефон: крупнее строки и шрифт, чтобы выпадающий список было легче нажать.
+  for (let r = 2; r <= groups.length + 1; r++) { const row = ws.getRow(r); row.height = 36; row.font = { size: 13 }; row.alignment = { vertical: 'middle' } }
   if (cps.length) {
     for (let r = 2; r <= groups.length + 1; r++) {
       ws.getCell(r, 2).dataValidation = { type: 'list', allowBlank: true, showErrorMessage: false, formulae: [`'${CP_DIRECTORY_SHEET}'!$A$2:$A$${cps.length + 1}`] }

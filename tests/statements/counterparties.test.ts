@@ -89,7 +89,7 @@ describe('файл контрагентов', () => {
     ctx.now = () => new Date('2026-11-10T10:00:00Z')
     const r = await applyCounterpartyFile(ctx, [row(2, 'X shop', { resolved: 'Right' })])
     expect(r.reassigned).toBe(1)
-    const found = await recognizeGroups(ctx, [{ text: 'X shop', iban: null, kind: 'card', rows: 1 }], '2026-11-20')
+    const found = await recognizeGroups(ctx, [{ text: 'X shop', iban: null, kind: 'card', rows: 1, samples: [] }], '2026-11-20')
     expect(found[0]?.name).toBe('Right')
     const old = (await storage.list('counterpartyIdentifiers')).find((i) => i.value === 'X shop' && i.validTo)
     expect(old?.validTo).toBe('2026-11-09')

@@ -19,6 +19,8 @@ export interface CpGroup {
   iban: string | null
   kind: 'card' | 'sepa' | 'other'
   rows: number
+  /** до 3 примеров операций для справки: дата · сумма · описание */
+  samples: string[]
 }
 
 /** Строка файла, прочитанная обратно. row = номер строки в Excel (для сообщений об ошибках). */
@@ -53,8 +55,9 @@ export function collectCounterpartyGroups(st: ParsedStatement): CpGroup[] {
       if (!text) continue
       const key = groupKeyOf(c)
       const g = map.get(key)
-      if (g) g.rows++
-      else map.set(key, { text, iban: c.iban ? ibanKey(c.iban).toUpperCase() : null, kind: c.kind, rows: 1 })
+      const sample = `${r.bookingDate} · ${(r.amountMinor / 100).toFixed(2)} ${acc.currency} · ${collapse(r.description).slice(0, 120)}`
+      if (g) { g.rows++; if (g.samples.length < 3) g.samples.push(sample) }
+      else map.set(key, { text, iban: c.iban ? ibanKey(c.iban).toUpperCase() : null, kind: c.kind, rows: 1, samples: [sample] })
     }
   }
   return [...map.values()]

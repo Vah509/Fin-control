@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createStatementTask, saveStatementFromTask, buildStatementAccountIntoLedger, removeStatementAccountFromLedger, deleteStatementDocument, buildDocumentWorkbook, documentFileName, deleteStatementTask, formatMinor, listStatementTasks, recordCounterpartyUpload, taskAccountsStatus, identifyStatementAccount, confirmAccountsRecognized, confirmCounterpartiesRecognized, taskStatement, updateTaskState } from '../../core'
 import {
-  applyCounterpartyFile, buildCounterpartyWorkbook, counterpartyStatus, extractPdfPages, parsePrivatStatement, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
+  acceptSimilar, applyCounterpartyFile, buildCounterpartyWorkbook, findSimilar, counterpartyStatus, extractPdfPages, parsePrivatStatement, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
 } from '../../core/statements'
 import type { StatementTaskState } from '../../core'
 import type { Account, StatementDocAccount, StatementDocRow, StatementDocument, StatementTask } from '../../data/types'
@@ -308,6 +308,8 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
   const accountsPassed = !!state.accountsConfirmed || !!state.counterpartiesLoaded
   const cps = useLoad(() => counterpartyStatus(ctx, st), [task.id, task.updatedAt])
   const allKnown = !!cps.data && cps.data.unrecognized.length === 0
+  const similar = useLoad(() => findSimilar(ctx, st), [task.id, task.updatedAt])
+  const [picked, setPicked] = useState<Record<string, boolean>>({})
   const closed = !!state.operationsDone
 
   async function run(fn: () => Promise<string>) {
@@ -341,6 +343,13 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
     await recordCounterpartyUpload(ctx, task.id, xlsx.name, { ...r, rows: r.rowsLinked })
     bump()
     return `Принято. Строк: ${r.rowsLinked}, новых контрагентов: ${r.created}, признаков добавлено: ${r.identifiersAdded}${r.tagsSet ? `, тегов проставлено: ${r.tagsSet}` : ''}${r.reassigned ? `, переназначено: ${r.reassigned}` : ''}.`
+  })
+  const acceptPicked = () => run(async () => {
+    const pairs = (similar.data ?? []).filter((p) => picked[p.text])
+    if (!pairs.length) return ''
+    const r = await acceptSimilar(ctx, pairs)
+    setPicked({}); bump()
+    return `Записано названий: ${r.rowsLinked}. Они опознаются как существующие контрагенты.`
   })
   const save = () => run(async () => {
     const r = await saveStatementFromTask(ctx, task.id); bump()
@@ -396,7 +405,7 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
         )}
       </Step>
       <Step title="Шаг 3. Контрагенты" summary={s3sum} status={s3} open={isOpen(3, s3)} onToggle={() => toggle(3, s3)}
-        info="Скачайте файл, впишите во 2-ю колонку имена из справочника (пусто = новый контрагент), загрузите обратно. Если в файле ошибка, ничего не записывается. Если все опознаны, файл не обязателен: шаг пройдёт сам, файл можно скачать для проверки, пока задача не удалена.">
+        info="Сначала можно принять похожие названия из списка. Затем скачайте файл (на первом листе инструкция для ИИ), впишите во 2-ю колонку имена из справочника (пусто = новый контрагент), загрузите обратно. Если в файле ошибка, ничего не записывается. Если все опознаны, файл не обязателен: шаг пройдёт сам, файл можно скачать для проверки, пока задача не удалена.">
         {state.counterpartiesLoaded && state.counterpartiesTotals && state.counterpartiesFile && (
           <Notice kind="ok">
             Загружен файл {state.counterpartiesFile}{state.counterpartiesAt ? ` (${dateTimeRu(state.counterpartiesAt)})` : ''}. Новых контрагентов {state.counterpartiesTotals.created}, признаков добавлено {state.counterpartiesTotals.identifiersAdded}{state.counterpartiesTotals.reassigned ? `, переназначено ${state.counterpartiesTotals.reassigned}` : ''}.
@@ -407,6 +416,18 @@ function TaskView({ task, reload }: { task: StatementTask; reload: () => void })
           <p className="muted">Не опознаны: {cps.data.unrecognized.slice(0, 5).map((g) => g.text).join('; ')}{cps.data.unrecognized.length > 5 ? ` и ещё ${cps.data.unrecognized.length - 5}` : ''}</p>
         )}
         {!state.counterpartiesLoaded && state.counterpartyFileDownloaded && !allKnown && <p className="muted">Файл уже скачан. Правьте его и загрузите ниже.</p>}
+        {!state.counterpartiesLoaded && similar.data && similar.data.length > 0 && (
+          <div>
+            <p><b>Похожие в справочнике.</b> Отметьте, с чем согласны: название из выписки станет названием этого контрагента, дальше он опознаётся сам.</p>
+            {similar.data.map((p) => (
+              <label key={p.text} style={{ display: 'block', padding: '8px 0' }}>
+                <input type="checkbox" checked={!!picked[p.text]} disabled={busy} onChange={(e) => setPicked({ ...picked, [p.text]: e.target.checked })} />{' '}
+                {p.text} <span className="muted">→</span> <b>{p.candidate}</b>
+              </label>
+            ))}
+            <button className="btn primary" disabled={busy || !similar.data.some((p) => picked[p.text])} onClick={() => void acceptPicked()}>Записать отмеченные</button>
+          </div>
+        )}
         <button className={allKnown ? 'btn' : 'btn primary'} disabled={busy} onClick={() => void download()}>Скачать файл контрагентов</button>
         {dlLink(3)}
         <input type="file" accept=".xlsx" disabled={busy}
