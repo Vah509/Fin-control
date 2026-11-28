@@ -1,5 +1,6 @@
 export * from './types'
 export { parseSlspStatement, parseSkAmount } from './slsp'
+export { parsePrivatStatement } from './privat'
 export { reconcileAccount } from './reconcile'
 export { extractPdfPages } from './pdfText'
 export { collectCounterpartyGroups, recognizeGroups, applyCounterpartyFile, counterpartyStatus } from './counterparties'

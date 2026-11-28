@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createStatementTask, saveStatementFromTask, buildStatementAccountIntoLedger, removeStatementAccountFromLedger, deleteStatementDocument, buildDocumentWorkbook, documentFileName, deleteStatementTask, formatMinor, listStatementTasks, recordCounterpartyUpload, taskAccountsStatus, identifyStatementAccount, confirmAccountsRecognized, confirmCounterpartiesRecognized, taskStatement, updateTaskState } from '../../core'
 import {
-  applyCounterpartyFile, buildCounterpartyWorkbook, counterpartyStatus, extractPdfPages, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
+  applyCounterpartyFile, buildCounterpartyWorkbook, counterpartyStatus, extractPdfPages, parsePrivatStatement, parseSlspStatement, readCounterpartyWorkbook, reconcileAccount,
 } from '../../core/statements'
 import type { StatementTaskState } from '../../core'
 import type { Account, StatementDocAccount, StatementDocRow, StatementDocument, StatementTask } from '../../data/types'
@@ -69,7 +69,7 @@ export function StatementsScreen() {
   )
 }
 
-const BANK_RU: Record<string, string> = { slsp: 'Slovenská sporiteľňa' }
+const BANK_RU: Record<string, string> = { slsp: 'Slovenská sporiteľňa', privat: 'ПриватБанк' }
 
 /** Сохранённые выписки (документы): аккордеон; раскрытие: раскладка по счетам, скачать XLSX, удалить. */
 function DocumentsList() {
@@ -180,7 +180,7 @@ export function StatementNewScreen() {
     setBusy(true); setMsg(null)
     try {
       if (!pdf.bytes.length) throw new Error('Файл пустой (0 байт). Выберите его ещё раз, лучше из «Загрузки».')
-      const st = parseSlspStatement(await extractPdfPages(pdf.bytes.slice()))
+      const st = /\.xlsx$/i.test(pdf.name) ? await parsePrivatStatement(pdf.bytes.slice()) : parseSlspStatement(await extractPdfPages(pdf.bytes.slice()))
       const task = await createStatementTask(ctx, st, pdf.name)
       bump()
       go('statementTask', { accountId: task.id })
@@ -190,8 +190,8 @@ export function StatementNewScreen() {
   return (
     <Screen title="Новая загрузка" back={<BackButton to="statements" label="Выписки" />}>
       <div className="card">
-        <p>Шаг 1. Выберите PDF выписки Slovenská sporiteľňa. Разбор идёт на телефоне; сам PDF нигде не хранится, в базу попадает только разобранное без полных номеров.</p>
-        <input type="file" accept="application/pdf,.pdf" disabled={busy}
+        <p>Шаг 1. Выберите выписку: PDF Slovenská sporiteľňa или XLSX ПриватБанка. Разбор идёт на телефоне; сам PDF нигде не хранится, в базу попадает только разобранное без полных номеров.</p>
+        <input type="file" accept="application/pdf,.pdf,.xlsx" disabled={busy}
           onChange={(e) => { setMsg(null); void readPicked(e.target.files?.[0]).then(setPdf).catch((x) => setMsg({ kind: 'error', text: errorText(x) })) }} />
         {pdf && <p className="muted">Выбран: {pdf.name}</p>}
         <button className="btn primary" disabled={busy || !pdf} onClick={() => void start()}>Загрузить и разобрать</button>

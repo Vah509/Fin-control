@@ -96,7 +96,7 @@ export async function saveStatementFromTask(ctx: CoreContext, taskId: string): P
   const ends = st.accounts.map((a) => a.periodEnd).sort()
   const document: StatementDocument = {
     id: docId, kind: 'statement', institutionId: accounts.find((x) => x.id === docAccounts[0]?.accountId)?.institutionId ?? null, bank: st.bank,
-    fileName: t.fileName, contentHash, periodStart: starts[0] ?? null, periodEnd: ends[ends.length - 1] ?? null, parser: `${st.bank}-pdf`,
+    fileName: t.fileName, contentHash, periodStart: starts[0] ?? null, periodEnd: ends[ends.length - 1] ?? null, parser: `${st.bank}-${st.bank === 'privat' ? 'xlsx' : 'pdf'}`,
     createdBy: ctx.actor.userId, createdAt: now,
   }
   const next: StatementTask = { ...t, status: 'done', state: { ...s, operationsDone: true, writtenCount: 0, documentId: docId, savedAt: now, savedRows: docRows.length, savedDuplicates: duplicates } as unknown as Json, updatedAt: now }
@@ -136,10 +136,10 @@ export async function buildDocumentWorkbook(ctx: CoreContext, documentId: string
 
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet('Операции')
-  ws.columns = ['№', 'Дата', 'Время', 'Счёт', 'Контрагент', 'Сумма', 'Валюта', 'Остаток после', 'Описание из выписки', 'Дубль'].map((header, i) => ({ header, width: [6, 11, 7, 22, 32, 14, 9, 16, 70, 7][i] }))
+  ws.columns = ['№', 'Дата', 'Время', 'Счёт', 'Контрагент', 'Категория', 'Сумма', 'Валюта', 'Остаток после', 'Описание из выписки', 'Дубль'].map((header, i) => ({ header, width: [6, 11, 7, 22, 32, 24, 14, 9, 16, 70, 7][i] }))
   const mk = (n: number, r: StatementDocRow, cp: string, amount: number, after: number | null, desc: string) => {
-    const row = ws.addRow([n, new Date(`${r.bookedAt.slice(0, 10)}T00:00:00Z`), '', accName.get(r.accountId) ?? '', cp, money(amount), cur.get(r.accountId) ?? '', money(after), desc, r.duplicateOf ? '+' : ''])
-    row.getCell(2).numFmt = 'DD.MM.YYYY'; row.getCell(6).numFmt = '#,##0.00'; row.getCell(8).numFmt = '#,##0.00'
+    const row = ws.addRow([n, new Date(`${r.bookedAt.slice(0, 10)}T00:00:00Z`), '', accName.get(r.accountId) ?? '', cp, r.title ?? '', money(amount), cur.get(r.accountId) ?? '', money(after), desc, r.duplicateOf ? '+' : ''])
+    row.getCell(2).numFmt = 'DD.MM.YYYY'; row.getCell(7).numFmt = '#,##0.00'; row.getCell(9).numFmt = '#,##0.00'
   }
   for (const r of rows) {
     mk(r.n, r, r.counterpartyId ? (cps.get(r.counterpartyId) ?? r.title ?? '') : (r.title ?? ''), r.amountMinor, r.balanceAfterMinor === null ? null : r.balanceAfterMinor - r.feeMinor, r.description)

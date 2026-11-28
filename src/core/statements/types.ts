@@ -24,6 +24,8 @@ export interface StatementRow {
   counterparty: StatementCounterparty
   /** маска карты («4544 12** **** 4324») или null */
   cardMask: string | null
+  /** категория банка (ПриватБанк), иначе не задана */
+  category?: string
   /** полный исходный текст операции одной строкой */
   description: string
   amountMinor: number
@@ -50,7 +52,7 @@ export interface StatementAccount {
   rows: StatementRow[]
 }
 
-export interface ParsedStatement { bank: 'slsp'; accounts: StatementAccount[] }
+export interface ParsedStatement { bank: 'slsp' | 'privat'; accounts: StatementAccount[] }
 
 export interface Reconciliation {
   accountKey: string

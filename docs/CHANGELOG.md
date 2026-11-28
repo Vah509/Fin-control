@@ -2,6 +2,13 @@
 
 Новые записи сверху. Формат: дата, что сделано, затронутые файлы и миграции, что проверено и что нет. Обновляется в каждом ZIP (`docs/WORKFLOW.md`).
 
+## 2026-11-28 (70): ПриватБанк XLSX, версия 0.2.41
+
+- Новый `src/core/statements/privat.ts` (`parsePrivatStatement`), экспорт в `statements/index.ts`. `types.ts`: `ParsedStatement.bank` = `slsp | privat`, у строки необязательное `category`. `statementDocs.ts`: `parser` = `<банк>-xlsx|pdf`, в XLSX документа колонка «Категория» (из `title`). `Statements.tsx`: выбор PDF/XLSX по расширению, подпись банка «ПриватБанк». Версия 0.2.41.
+- Тест `tests/statements/privat.test.ts` (3, выдуманные данные). Всего 259 тестов, 37 файлов.
+- Решения владельца записаны в `STATEMENT-XLSX.md`, раздел 25. Миграций нет.
+- Проверено: `tsc`, сборка, тесты, разбор реальной выписки владельца локально (файл в репозиторий не клался). Не проверено: телефон.
+
 ## 2026-11-28 (69): чистка ядра, версия 0.2.40
 
 - Удалены файлы (список `cleanup-requests/cleanup-0.2.40.txt`): `src/core/statementProblems.ts`, `src/core/statements/balances.ts`, `openingFix.ts`, `opsWorkbook.ts`, тесты `openingfix`, `opsWorkbook`, `resolve`, `write` в `tests/statements/`. Экран «Проблемы» (`StatementProblemsScreen`) и страница `statementProblems` убраны из `Statements.tsx`, `App.tsx`, `app.tsx`, `navHistory.ts`.
